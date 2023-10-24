@@ -9,32 +9,31 @@
 constexpr std::string_view accounts_fname = "accs.json";
 constexpr std::string_view books_fname = "books.json";
 
+/*
+Вывести список книг с фамилиями авторов в алфавитном порядке, изданных после
+заданного года (год вводится с клавиатуры). Вывести список книг, находящихся в
+текущий момент у читателей.
+*/
+
 int main() {
-    D_SUCCESS("WOWWWW!");
-    Console::Configure("Library App", {1280, 720});
+    SetConsoleCP(65001);
+    SetConsoleOutputCP(65001);
+    std::string windows_title = "Library App";
+    Console::Configure(windows_title, {800, 600});
+    Console::setFont(18, L"IMB Plex Mono");
+    std::atexit([] { FileSystem::save(accounts_fname, User::get_all_accs()); });
+    std::atexit([] { FileSystem::save(books_fname, Book::get_all_books()); });
 
     Book::load_books(books_fname);
     User::load_accounts(accounts_fname);
 
-    std::atexit([] { FileSystem::save(accounts_fname, User::get_all_accs()); });
-    std::atexit([] { FileSystem::save(books_fname, Book::get_all_books()); });
+    const auto user = authorize();
+    Console::setTitle(windows_title + " | " + user.get_login());
 
     std::unique_ptr<Library_as_user> lib;
-    const auto user = authorize();
-
     if (user.is_admin())
-        lib = std::make_unique< Library_as_admin>();
+        lib = std::make_unique<Library_as_admin>();
     else
-        lib = std::make_unique< Library_as_user>();
-    lib->menu();
-
-#ifdef _DEBUG
-    for (const auto& i : User::get_all_accs().items()) {
-        const auto&[title, data] = i;
-        std::cout << title << '\t' << data << '\n';
-    }
-#endif 
-
-
+        lib = std::make_unique<Library_as_user>();
     system("pause");
 }

@@ -32,15 +32,11 @@ struct SZ {
         csbi.srWindow.Bottom - csbi.srWindow.Top + 1};
 }
 
-inline void setSizeByPixels(uint16_t w, uint16_t h) {
+inline void setSizeByPixels(const SZ<uint16_t>& newSize) {
+    const auto& [w, h] = newSize; 
     RECT tempRect{};
     GetWindowRect(GetConsoleWindow(), &tempRect);
     MoveWindow(GetConsoleWindow(), tempRect.left, tempRect.top, w, h, TRUE);
-}
-
-inline void setSizeByPixels(const SZ<uint16_t>& newSize) {
-    const auto& [w, h] = newSize;
-    setSizeByPixels(w, h);
 }
 
 [[nodiscard]] inline auto getFontSize() {
@@ -59,14 +55,6 @@ inline void setFont(int newFontSize, const wchar_t* newFont = L"Consolas") {
     SetCurrentConsoleFontEx(GetStdHandle(STD_OUTPUT_HANDLE), NULL, &cfi);
 }
 
-[[nodiscard]] inline auto getWindowSizeByChars() {
-    auto csbi = CONSOLE_SCREEN_BUFFER_INFO{};
-    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-    return SZ{
-        csbi.srWindow.Right - csbi.srWindow.Left + 1,
-        csbi.srWindow.Bottom - csbi.srWindow.Top + 1};
-}
-
 inline void showCursor(bool show) {
     CONSOLE_CURSOR_INFO structCursorInfo;
     GetConsoleCursorInfo(GetStdHandle(STD_OUTPUT_HANDLE), &structCursorInfo);
@@ -79,8 +67,7 @@ inline void setCursorPos(uint8_t newX, uint8_t newY) {
 }
 
 inline void setTitle(std::string_view newTitle) {
-    const auto wStr = std::wstring{newTitle.begin(), newTitle.end()}.c_str();
-    SetConsoleTitle(wStr);
+    SetConsoleTitle(std::wstring{ newTitle.begin(), newTitle.end() }.c_str());
 }
 
 inline void Configure(std::string_view title, const SZ<uint16_t>& size) {
