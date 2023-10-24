@@ -36,7 +36,16 @@
     <ClInclude Include="include\Book.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\fsystem.hpp">
+    <ClInclude Include="include\Fsystem.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Log.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Console.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Random.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

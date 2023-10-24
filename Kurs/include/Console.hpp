@@ -6,6 +6,7 @@
 #include <concepts>
 #include <string>
 #include <string_view>
+
 namespace Console {
 template <std::integral T>
 struct SZ {
@@ -18,13 +19,17 @@ struct SZ {
 [[nodiscard]] inline auto getSizeByPixels() {
     RECT tempRect{};
     GetWindowRect(GetConsoleWindow(), &tempRect);
-    return SZ{tempRect.right - tempRect.left, tempRect.bottom - tempRect.top};
+    return SZ{
+        tempRect.right - tempRect.left,
+        tempRect.bottom - tempRect.top};
 }
 
 [[nodiscard]] inline auto getSizeByChars() {
     CONSOLE_SCREEN_BUFFER_INFO csbi{};
     GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-    return SZ<uint16_t>{csbi.srWindow.Right - csbi.srWindow.Left + 1, csbi.srWindow.Bottom - csbi.srWindow.Top + 1};
+    return SZ{
+        csbi.srWindow.Right - csbi.srWindow.Left + 1,
+        csbi.srWindow.Bottom - csbi.srWindow.Top + 1};
 }
 
 inline void setSizeByPixels(uint16_t w, uint16_t h) {
@@ -57,7 +62,9 @@ inline void setFont(int newFontSize, const wchar_t* newFont = L"Consolas") {
 [[nodiscard]] inline auto getWindowSizeByChars() {
     auto csbi = CONSOLE_SCREEN_BUFFER_INFO{};
     GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-    return SZ{csbi.srWindow.Right - csbi.srWindow.Left + 1, csbi.srWindow.Bottom - csbi.srWindow.Top + 1};
+    return SZ{
+        csbi.srWindow.Right - csbi.srWindow.Left + 1,
+        csbi.srWindow.Bottom - csbi.srWindow.Top + 1};
 }
 
 inline void showCursor(bool show) {
@@ -79,10 +86,9 @@ inline void setTitle(std::string_view newTitle) {
 inline void Configure(std::string_view title, const SZ<uint16_t>& size) {
     DWORD dwMode{};
     GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &dwMode);
-    dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), dwMode);
+    SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), (dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING));
 
     setTitle(title);
-    setSizeByPixels(size)
+    setSizeByPixels(size);
 }
 }  // namespace Console

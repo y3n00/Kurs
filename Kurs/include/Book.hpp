@@ -6,33 +6,23 @@
 class Book {
    private:
     static inline size_t global_book_id = 1;
-    static inline nlohmann::json all_books;
+    static inline nlohmann::json all_books{};
 
    public:
     static void load_books(std::string_view filename) {
-        all_books = std::move(load(filename));
+        FileSystem::load(filename, all_books);
     }
 
-    static Book create_book(std::string_view title, bool in_lib,
-                            uint16_t year, uint16_t pages_num,
-                            std::string_view author, std::string_view publisher) {
-        Book b(title, in_lib, year, pages_num, author, publisher);
-        return b;
-    }
-
-    static const auto& get_all_books() { return all_books; }
+    [[nodiscard]] static const auto& get_all_books() { return all_books; }
 
    private:
     bool in_library{};
     uint16_t book_year{}, book_pages{};
     size_t book_id{global_book_id++}, last_reader{};
     std::string author_name{}, book_title{}, book_publisher{};
-    inline void save_to_global() const {
-        all_books.push_back(this->to_json());
-    }
+    inline void save_to_global() const { all_books.push_back(this->to_json()); }
 
    public:
-    Book() { save_to_global(); }
     Book(std::string_view title, bool in_lib,
          uint16_t year, uint16_t pages_num,
          std::string_view author,
@@ -46,30 +36,30 @@ class Book {
     }
     ~Book() = default;
 
-    auto is_in_library() const { return in_library; }
+    [[nodiscard]] auto get_id() const { return book_id; }
+
+    [[nodiscard]] auto is_in_library() const { return in_library; }
     void setin_library(bool new_value) { in_library = new_value; }
 
-    auto get_year() const { return book_year; }
+    [[nodiscard]] auto get_year() const { return book_year; }
     void set_year(uint16_t new_value) { book_year = new_value; }
 
-    auto get_pages() const { return book_pages; }
+    [[nodiscard]] auto get_pages() const { return book_pages; }
     void set_pages(uint16_t new_value) { book_pages = new_value; }
 
-    auto get_id() const { return book_id; }
-
-    auto get_last_reader() const { return last_reader; }
+    [[nodiscard]] auto get_last_reader() const { return last_reader; }
     void set_last_reader(uint16_t new_value) { last_reader = new_value; }
 
-    auto get_author() const { return author_name; }
+    [[nodiscard]] auto get_author() const { return author_name; }
     void set_author(std::string_view new_value) { author_name = new_value; }
 
-    auto get_title() const { return book_title; }
+    [[nodiscard]] auto get_title() const { return book_title; }
     void set_title(std::string_view new_value) { book_title = new_value; }
 
-    auto get_publisher() const { return book_publisher; }
+    [[nodiscard]] auto get_publisher() const { return book_publisher; }
     void set_publisher(std::string_view new_value) { book_publisher = new_value; }
 
-    nlohmann::json to_json() const {
+    [[nodiscard]] nlohmann::json to_json() const {
         using namespace nlohmann;
         json js;
         js["Author"] = author_name;

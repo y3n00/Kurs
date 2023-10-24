@@ -141,10 +141,13 @@
   <ItemGroup>
     <ClInclude Include="include\Book.hpp" />
     <ClInclude Include="include\Console.h" />
-    <ClInclude Include="include\fsystem.hpp" />
+    <ClInclude Include="include\Console.hpp" />
+    <ClInclude Include="include\Fsystem.hpp" />
     <ClInclude Include="include\Library.hpp" />
     <ClInclude Include="include\Log.h" />
+    <ClInclude Include="include\Log.hpp" />
     <ClInclude Include="include\Random.h" />
+    <ClInclude Include="include\Random.hpp" />
     <ClInclude Include="include\thirdparty\json.hpp" />
     <ClInclude Include="include\User.hpp" />
   </ItemGroup>
