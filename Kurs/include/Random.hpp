@@ -1,4 +1,5 @@
 #pragma once
+
 #include <random>
 template <typename T = uint32_t>
 class Random {
