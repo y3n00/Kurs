@@ -1,7 +1,6 @@
 #pragma once
 
 #include <iostream>
-#include <stacktrace>
 #include <string>
 #include <utility>
 
@@ -86,9 +85,7 @@ class User {
     }
 
     [[nodiscard]] auto get_login() const { return user_login; }
-    inline void set_login(const auto& new_value) {
-        user_login = new_value;
-    }
+    inline void set_login(const auto& new_value) { user_login = new_value; }
 };
 
 namespace {

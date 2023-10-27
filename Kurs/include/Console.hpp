@@ -7,6 +7,9 @@
 #include <string>
 #include <string_view>
 
+#define GETTER [[nodiscard]] inline auto
+#define SETTER inline void
+
 namespace Console {
 template <std::integral T>
 struct SZ {
@@ -16,7 +19,7 @@ struct SZ {
     SZ(const T& w, const T& h) : width{w}, height{h} {}
 };
 
-[[nodiscard]] inline auto getSizeByPixels() {
+GETTER getSizeByPixels() {
     RECT tempRect{};
     GetWindowRect(GetConsoleWindow(), &tempRect);
     return SZ{
@@ -24,7 +27,7 @@ struct SZ {
         tempRect.bottom - tempRect.top};
 }
 
-[[nodiscard]] inline auto getSizeByChars() {
+GETTER getSizeByChars() {
     CONSOLE_SCREEN_BUFFER_INFO csbi{};
     GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
     return SZ{
@@ -32,20 +35,28 @@ struct SZ {
         csbi.srWindow.Bottom - csbi.srWindow.Top + 1};
 }
 
-inline void setSizeByPixels(const SZ<uint16_t>& newSize) {
-    const auto& [w, h] = newSize; 
+SETTER setSizeByPixels(const SZ<uint16_t>& newSize) {
+    const auto& [w, h] = newSize;
     RECT tempRect{};
     GetWindowRect(GetConsoleWindow(), &tempRect);
     MoveWindow(GetConsoleWindow(), tempRect.left, tempRect.top, w, h, TRUE);
 }
 
-[[nodiscard]] inline auto getFontSize() {
+SETTER setSizeByChars(const SZ<int16_t>& newSize) {
+    const auto& [w, h] = newSize;
+    const COORD coord{w, h};
+    const SMALL_RECT rect{0, 0, w - 1, h - 1};
+    SetConsoleScreenBufferSize(GetStdHandle(STD_OUTPUT_HANDLE), coord);  // Set Buffer Size
+    SetConsoleWindowInfo(GetStdHandle(STD_OUTPUT_HANDLE), TRUE, &rect);  // Set Window Size
+}
+
+GETTER getFontSize() {
     auto cfi = CONSOLE_FONT_INFOEX{.cbSize = sizeof(CONSOLE_FONT_INFOEX)};
     GetCurrentConsoleFontEx(GetStdHandle(STD_OUTPUT_HANDLE), NULL, &cfi);
     return cfi.dwFontSize.X;
 }
 
-inline void setFont(int newFontSize, const wchar_t* newFont = L"Consolas") {
+SETTER setFont(int newFontSize, const wchar_t* newFont = L"Consolas") {
     auto cfi = CONSOLE_FONT_INFOEX{.cbSize = sizeof(CONSOLE_FONT_INFOEX)};
     GetCurrentConsoleFontEx(GetStdHandle(STD_OUTPUT_HANDLE), NULL, &cfi);
 
@@ -55,22 +66,29 @@ inline void setFont(int newFontSize, const wchar_t* newFont = L"Consolas") {
     SetCurrentConsoleFontEx(GetStdHandle(STD_OUTPUT_HANDLE), NULL, &cfi);
 }
 
-inline void showCursor(bool show) {
+SETTER toggleCursor(bool show) {
     CONSOLE_CURSOR_INFO structCursorInfo;
     GetConsoleCursorInfo(GetStdHandle(STD_OUTPUT_HANDLE), &structCursorInfo);
     structCursorInfo.bVisible = show;
     SetConsoleCursorInfo(GetStdHandle(STD_OUTPUT_HANDLE), &structCursorInfo);
 }
 
-inline void setCursorPos(uint8_t newX, uint8_t newY) {
+SETTER setCursorPos(const Console::SZ<int16_t>& place) {
+    const auto [newX, newY] = place;
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), {newX, newY});
 }
 
-inline void setTitle(std::string_view newTitle) {
-    SetConsoleTitle(std::wstring{ newTitle.begin(), newTitle.end() }.c_str());
+GETTER getWindowInfo() {
+    CONSOLE_SCREEN_BUFFER_INFO consoleInfo{};
+    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &consoleInfo);
+    return consoleInfo;
 }
 
-inline void Configure(std::string_view title, const SZ<uint16_t>& size) {
+SETTER setTitle(std::string_view newTitle) {
+    SetConsoleTitle(std::wstring{newTitle.begin(), newTitle.end()}.c_str());
+}
+
+SETTER Configure(std::string_view title, const SZ<uint16_t>& size) {
     DWORD dwMode{};
     GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &dwMode);
     SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), (dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING));
@@ -79,3 +97,5 @@ inline void Configure(std::string_view title, const SZ<uint16_t>& size) {
     setSizeByPixels(size);
 }
 }  // namespace Console
+#undef SETTER
+#undef GETTER

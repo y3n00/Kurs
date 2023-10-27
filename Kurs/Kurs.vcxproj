@@ -142,6 +142,7 @@
     <ClInclude Include="include\Book.hpp" />
     <ClInclude Include="include\Console.h" />
     <ClInclude Include="include\Console.hpp" />
+    <ClInclude Include="include\Console_wrapper.hpp" />
     <ClInclude Include="include\Fsystem.hpp" />
     <ClInclude Include="include\Library.hpp" />
     <ClInclude Include="include\Log.h" />

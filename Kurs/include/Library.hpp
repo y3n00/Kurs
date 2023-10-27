@@ -8,6 +8,8 @@
 
 #include "Log.hpp"
 
+constexpr static auto menu_item_fmt = "{: >2}){}";
+
 class Library_as_user {
    public:
     static inline const std::vector<std::string> user_lib_menu{
@@ -20,7 +22,7 @@ class Library_as_user {
         std::println("\n\n{0:-^50}", "This is user menu");
 
         for (const auto& [idx, item] : user_lib_menu | std::views::enumerate) {
-            std::println("{: >2}){}", idx + 1, item);
+            std::println(menu_item_fmt, idx + 1, item);
         }
     }
 
@@ -44,12 +46,11 @@ class Library_as_admin : virtual public Library_as_user {
 
         const size_t delta_size = Library_as_user::user_lib_menu.size() + 1;
         for (const auto& [idx, item] : user_lib_menu | std::views::enumerate) {
-            Logger::Warning(std::format("{: >2}){}", idx + delta_size, item));
+            Logger::Warning(std::format(menu_item_fmt, idx + delta_size, item));
         }
     }
 
-    void main_loop() const override {
-        }
+    void main_loop() const override {}
 };
 /* ADMIN!
 1. Управление учетными записями пользователей:
