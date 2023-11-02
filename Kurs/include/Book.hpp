@@ -11,9 +11,7 @@ class Book {
    public:
     static void load_books(std::string_view filename) {
         FileSystem::load(filename, all_books);
-        if (all_books.empty()) {
-            global_book_id = 1;
-        } else {
+        if (!all_books.empty()){
             for (const auto& [_, data] : all_books.items())
                 global_book_id = std::max(global_book_id, data.at("ID").get<size_t>());
             global_book_id += 1;

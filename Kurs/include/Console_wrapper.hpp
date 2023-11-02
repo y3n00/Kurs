@@ -1,6 +1,7 @@
 #define NOMINMAX
 #include <conio.h>
 
+#include <algorithm>
 #include <iostream>
 
 #include "Console.hpp"
@@ -27,23 +28,23 @@ enum Keys : int {
     DOWN_ARR = 80,
 };
 
-inline void put_str(std::string_view line, const Console::SZ<int16_t>& place) {
-    Console::setCursorPos(place);  // top line
-    std::cout << line;
+inline void put_str(std::string_view str, const Console::SZ<int16_t>& place) {
+    Console::setCursorPos(place);
+    std::cout << str;
 }
 
 inline void draw_frame(char vert, char hor) {
+    static constexpr Console::SZ<int16_t> DEFAULT_PLACEHOLDER{1, 1};
     const auto [CON_WIDTH, CON_HEIGHT] = Console::getSizeByChars();
     const auto hor_border = std::string(CON_WIDTH, hor);
     const auto vert_border = vert + std::string(CON_WIDTH - 2, ' ') + vert;
 
-    put_str(hor_border, {0, 0});                          // top line
-    Console::setCursorPos({0, int16_t(CON_HEIGHT - 1)});  // bottom line
-    std::cout << hor_border;                              //
+    put_str(hor_border, {0, 0});                        // top line
+    put_str(hor_border, {0, int16_t(CON_HEIGHT - 1)});  // bottom line
 
     for (int16_t i = 1; i < CON_HEIGHT - 1; i++)  // verical borders, 1 for bottom border
         put_str(vert_border, {0, i});             //
-    Console::setCursorPos({1, 1});
+    Console::setCursorPos(DEFAULT_PLACEHOLDER);
 }
 
 inline void write(std::string_view msg) {

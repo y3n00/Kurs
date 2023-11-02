@@ -32,17 +32,14 @@ int main() {
 //////////////////////////////////////////////////////////////////////////////
 #define CHECK
 #ifdef CHECK
-    const auto str = "very looooong string";
+    const auto str = "some loooooooong string";
     Console::setSizeByChars({50, 20});
 
     int pressed_key = -1;
     do {
         Console_wrapper::draw_frame('|', '-');
-        Console::setCursorPos({40, 10});
-        Console_wrapper::write_line(str);  // do not fit
-        Console_wrapper::write(str);       // fit, from begining
-        Console_wrapper::write("\t");      // fit, from begining
-        Console_wrapper::write(str);       // exactly after prev
+        Console::setCursorPos({5, 5});
+        Console_wrapper::write(str);
     } while ((pressed_key = _getch()) != Console_wrapper::Keys::ESCAPE);
 #else
     Book::load_books(books_fname);

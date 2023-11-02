@@ -1,10 +1,12 @@
 #pragma once
 
-#include <iostream>
+#include <print>
 #include <string>
 #include <utility>
 
+#include "Console.hpp"
 #include "Fsystem.hpp"
+#include "Log.hpp"
 #include "thirdparty/json.hpp"
 
 enum User_role : uint16_t {
@@ -12,7 +14,7 @@ enum User_role : uint16_t {
     user
 };
 
-[[nodiscard]] auto encrypt_str(std::string_view arg, size_t key) {
+[[nodiscard]] auto encrypt_str(std::string_view arg, size_t key) {  // caesar + hash
     return std::hash<std::string>{}(arg |
                                     std::views::transform([key](char ch) { return ch + key; }) |
                                     std::ranges::to<std::string>());
@@ -26,9 +28,7 @@ class User {
    public:
     static void load_accounts(std::string_view filename) {
         FileSystem::load(filename, all_accs);
-        if (all_accs.empty()) {
-            next_user_id = 1;
-        } else {
+        if (!all_accs.empty()) {
             for (const auto& [_, data] : all_accs.items())
                 next_user_id = std::max(next_user_id, data.at("ID").get<size_t>());
             next_user_id += 1;
@@ -90,8 +90,7 @@ class User {
 
 namespace {
 [[nodiscard]] static User registration() {
-    const auto con_sz = Console::getSizeByChars();         // Header
-    std::println("{:=^{}}", "Регистрация", con_sz.width);  //
+    std::println("{:=^{}}", "Регистрация", Console::getSizeByChars().width);  // Header
 
     int role_buf;
     std::string login_buf, passw_buf, rep_passw_buf;
@@ -122,8 +121,7 @@ namespace {
 }
 
 [[nodiscard]] static User login() {
-    const auto con_sz = Console::getSizeByChars();   // Header
-    std::println("{:=^{}}", "Логин", con_sz.width);  //
+    std::println("{:=^{}}", "Логин", Console::getSizeByChars().width);  // Header
 
     std::string login_buf, passw_buf;
     std::print("{}", "Введите логин: ");
@@ -152,7 +150,7 @@ namespace {
         return registration();
 
     int input_buf;
-    std::println("{}\n{}\n{}", "Хотите создать новый аккаунт?", "1)Да", "2)Нет");
+    std::println("Хотите создать новый аккаунт?\n1)Да\n2)Нет");
     std::cin >> input_buf;
     return std::clamp(input_buf - 1, 0, 1) == 0 ? registration() : login();
 }

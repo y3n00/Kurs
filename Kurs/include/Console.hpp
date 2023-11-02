@@ -8,15 +8,20 @@
 #include <string_view>
 
 #define GETTER [[nodiscard]] inline auto
+#define GETTER_T(Ty) [[nodiscard]] inline Ty
 #define SETTER inline void
 
 namespace Console {
 template <std::integral T>
 struct SZ {
-    T width, height;
+    T width = -1, height = -1;
     SZ() = default;
-    SZ(T&& w, T&& h) : width{w}, height{h} {}
-    SZ(const T& w, const T& h) : width{w}, height{h} {}
+    constexpr SZ(T&& w, T&& h) : width{w}, height{h} {}
+    constexpr SZ(const T& w, const T& h) : width{w}, height{h} {}
+    constexpr operator bool() const {
+        static constexpr T NOT_SETTED = -1;
+        return (width != NOT_SETTED && height != NOT_SETTED);
+    }
 };
 
 GETTER getSizeByPixels() {
@@ -97,5 +102,3 @@ SETTER Configure(std::string_view title, const SZ<uint16_t>& size) {
     setSizeByPixels(size);
 }
 }  // namespace Console
-#undef SETTER
-#undef GETTER
