@@ -18,15 +18,17 @@ class Library_as_user {
         "сортировка",
     };
 
-    virtual void print_menu() {
+    virtual void print_menu() const {
         std::println("\n\n{0:-^50}", "This is user menu");
 
         for (const auto& [idx, item] : user_lib_menu | std::views::enumerate) {
             std::println(menu_item_fmt, idx + 1, item);
         }
     }
+    virtual void do_at(int idx) {}
 
-    virtual void main_loop() const {}
+    [[nodiscard]] virtual size_t get_menu_size() const { return user_lib_menu.size(); }
+
     virtual ~Library_as_user() = default;
 };
 
@@ -39,7 +41,7 @@ class Library_as_admin : virtual public Library_as_user {
         "удалить учетную запись",
     };
 
-    void print_menu() override {
+    void print_menu() const override {
         Library_as_user::print_menu();
 
         std::println("{0:-^50}", "This is admin menu");
@@ -49,8 +51,9 @@ class Library_as_admin : virtual public Library_as_user {
             Logger::Warning(std::format(menu_item_fmt, idx + delta_size, item));
         }
     }
+    void do_at(int idx) override {}
 
-    void main_loop() const override {}
+    [[nodiscard]] size_t get_menu_size() const override { return admin_lib_menu.size(); }
 };
 /* ADMIN!
 1. Управление учетными записями пользователей:

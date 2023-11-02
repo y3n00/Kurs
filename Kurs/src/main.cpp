@@ -29,19 +29,8 @@ int main() {
     std::at_quick_exit(exit_callback);
     std::atexit(exit_callback);
 
-//////////////////////////////////////////////////////////////////////////////
-#define CHECK
-#ifdef CHECK
-    const auto str = "some loooooooong string";
-    Console::setSizeByChars({50, 20});
+    //////////////////////////////////////////////////////////////////////////////
 
-    int pressed_key = -1;
-    do {
-        Console_wrapper::draw_frame('|', '-');
-        Console::setCursorPos({5, 5});
-        Console_wrapper::write(str);
-    } while ((pressed_key = _getch()) != Console_wrapper::Keys::ESCAPE);
-#else
     Book::load_books(books_fname);
     User::load_accounts(accs_fname);
 
@@ -54,10 +43,16 @@ int main() {
     else
         lib = std::make_unique<Library_as_user>();
 
-    int pressed_key = -1;
+    static const size_t MIN_IDX = 1, MAX_IDX = lib->get_menu_size();
+    static int choice = -1;
+
     do {
         Console_wrapper::draw_frame('|', '-');
 
-    } while ((pressed_key = _getch()) != Console_wrapper::Keys::ESCAPE);
-#endif  // CHECK
+        lib->print_menu();
+        std::cin >> choice;
+        choice = std::clamp<int>(choice, MIN_IDX, MAX_IDX);
+
+        lib->do_at(choice);
+    } while (choice != -1);
 }

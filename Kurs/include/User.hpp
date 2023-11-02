@@ -95,7 +95,7 @@ namespace {
     int role_buf;
     std::string login_buf, passw_buf, rep_passw_buf;
 
-    std::print("{}", "Введите логин: ");
+    std::print("Введите логин: ");
     std::cin.ignore();
     std::getline(std::cin, login_buf);
     if (User::get_all_accs().contains(login_buf)) {
@@ -103,17 +103,17 @@ namespace {
         return registration();
     }
 
-    std::print("{}", "Введите пароль: ");
+    std::print("Введите пароль: ");
     std::getline(std::cin, passw_buf);
 
-    std::print("{}", "Повторите пароль: ");
+    std::print("Повторите пароль: ");
     std::getline(std::cin, rep_passw_buf);
     if (passw_buf != rep_passw_buf) {
         Logger::Error("Пароли не совпадают");
         return registration();
     }
 
-    std::print("{}", "Выберите роль:\n1)Администратор\n2)Пользователь\n");
+    std::print("Выберите роль:\n1)Администратор\n2)Пользователь\n");
     std::cin >> role_buf;
 
     const auto role = static_cast<User_role>(std::clamp(role_buf - 1, 0, 1));
@@ -124,7 +124,7 @@ namespace {
     std::println("{:=^{}}", "Логин", Console::getSizeByChars().width);  // Header
 
     std::string login_buf, passw_buf;
-    std::print("{}", "Введите логин: ");
+    std::print("Введите логин: ");
     std::cin.ignore();
     std::getline(std::cin, login_buf);
     if (not User::get_all_accs().contains(login_buf)) {
@@ -134,7 +134,7 @@ namespace {
     const auto& user_data = User::get_all_accs().at(login_buf);
     const auto user_passw = user_data.at("Password").get<std::size_t>();
 
-    std::print("{}", "Введите пароль: ");
+    std::print("Введите пароль: ");
     std::getline(std::cin, passw_buf);
     if (user_passw not_eq encrypt_str(passw_buf, login_buf.length())) {
         Logger::Error("Неверный пароль");
