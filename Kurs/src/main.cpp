@@ -10,21 +10,21 @@ constexpr std::string_view accs_fname = "accs.json";
 constexpr std::string_view books_fname = "books.json";
 
 int main() {
-    static const auto prev_cp_val = GetConsoleCP();               // save console state
-    static const auto prev_cp_output_val = GetConsoleOutputCP();  //
-
-    SetConsoleCP(65001);        // set new encoding
+    SetConsoleCP(65001);        // set new encoding for ru lang
     SetConsoleOutputCP(65001);  //
 
-    std::string windows_title = "Library App";      // dynamic windows titlebar buffer
+    std::string windows_title = "Library App";      // dynamic titlebar buffer
     Console::Configure(windows_title, {960, 480});  // setup console with new title and size
-    Console::setFont(18);                           // new font size
+    Console::setFont(18);                           // console font resize
 
     constexpr auto exit_callback = []() -> void {
-        FileSystem::save(accs_fname, User::get_all_accs());
-        FileSystem::save(books_fname, Book::get_all_books());
-        SetConsoleCP(prev_cp_val);
-        SetConsoleOutputCP(prev_cp_output_val);
+        int choice = -1;
+        std::print("Сохранить данные?\n1) Да\n2)Нет\n");
+        std::cin >> choice;
+        if (choice == 1) {
+            FileSystem::save(accs_fname, User::get_all_accs());
+            FileSystem::save(books_fname, Book::get_all_books());
+        }
     };
     std::at_quick_exit(exit_callback);
     std::atexit(exit_callback);
@@ -49,7 +49,7 @@ int main() {
     do {
         Console_wrapper::draw_frame('|', '-');
 
-        lib->print_menu();
+        Console_wrapper::writeln(lib->get_menu().str());
         std::cin >> choice;
         choice = std::clamp<int>(choice, MIN_IDX, MAX_IDX);
 

@@ -4,11 +4,12 @@
 #include <map>
 #include <print>
 #include <ranges>
+#include <sstream>
 #include <utility>
 
 #include "Log.hpp"
 
-constexpr static auto menu_item_fmt = "{: >2}){}";
+constexpr static auto menu_item_fmt = "{: >2}){}\n";
 
 class Library_as_user {
    public:
@@ -18,12 +19,14 @@ class Library_as_user {
         "сортировка",
     };
 
-    virtual void print_menu() const {
-        std::println("\n\n{0:-^50}", "This is user menu");
+    virtual std::stringstream get_menu() const {
+        std::stringstream sstr;
+        sstr << std::format("{0:-^50}\n", "This is user menu");
 
         for (const auto& [idx, item] : user_lib_menu | std::views::enumerate) {
-            std::println(menu_item_fmt, idx + 1, item);
+            sstr << std::format(menu_item_fmt, idx + 1, item);
         }
+        return sstr;
     }
     virtual void do_at(int idx) {}
 
@@ -41,15 +44,14 @@ class Library_as_admin : virtual public Library_as_user {
         "удалить учетную запись",
     };
 
-    void print_menu() const override {
-        Library_as_user::print_menu();
-
-        std::println("{0:-^50}", "This is admin menu");
+    std::stringstream get_menu() const override {
+        auto sstr = Library_as_user::get_menu();
+        sstr << std::format("{0:-^50}\n", "This is admin menu");
 
         const size_t delta_size = Library_as_user::user_lib_menu.size() + 1;
-        for (const auto& [idx, item] : user_lib_menu | std::views::enumerate) {
-            Logger::Warning(std::format(menu_item_fmt, idx + delta_size, item));
-        }
+        for (const auto& [idx, item] : user_lib_menu | std::views::enumerate)
+            sstr << std::format(menu_item_fmt, idx + delta_size, item);
+        return sstr;
     }
     void do_at(int idx) override {}
 
