@@ -76,15 +76,18 @@ class Console_wrapper {
         const auto [CURSOR_X, CURSOR_Y] = Console::getWindowInfo().dwCursorPosition;  // current cursor position
 
         const int32_t ACTUAL_CON_WIDTH = CON_WIDTH - BORDER_PADDING;
+        Console::SZ<int16_t> place{CURSOR_X, CURSOR_Y};
 
         for (const auto& [idx, line] : MSG_LINES | std::views::enumerate) {
+            auto& [x, y] = place;
             const int32_t EXTRA_SPACE_HOR = (ACTUAL_CON_WIDTH - (CURSOR_X + line.length()));
             if (EXTRA_SPACE_HOR >= 0) {  // if line fully fits
-                put_str(line, { int16_t(CURSOR_X + idx), int16_t(CURSOR_Y + 1) });
+                put_str(line, place);
             } else {
-                const size_t FITTED_SIZE = msg.length() + EXTRA_SPACE_HOR;                         // EXTRA_SPACE is negative
-                put_str(line.substr(0, FITTED_SIZE - 3) + "...", { int16_t(CURSOR_X + idx), int16_t(CURSOR_Y + 1) });  // -3 for "..."
+                const size_t FITTED_SIZE = msg.length() + EXTRA_SPACE_HOR;  // EXTRA_SPACE is negative
+                put_str(line.substr(0, FITTED_SIZE - 3) + "...", place);    // -3 for "..."
             }
+            ++y;
         }
     }
 
