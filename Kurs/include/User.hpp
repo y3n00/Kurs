@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "Console.hpp"
+#include "Console_wrapper.hpp"
 #include "Fsystem.hpp"
 #include "Log.hpp"
 #include "thirdparty/json.hpp"
@@ -57,7 +58,7 @@ class User {
 
     User(std::string_view login,
          std::string_view passw,
-         User_role role) : user_role{role},
+         User_role ROLE) : user_role{ROLE},
                            user_encrypted_passw{encrypt_str(passw, login.length())},
                            user_login{login} {
         to_global_json();
@@ -71,7 +72,7 @@ class User {
     ~User() = default;
 
     [[nodiscard]] auto is_admin() const { return user_role == User_role::admin; }
-    [[nodiscard]] auto get_formated_ID() const { return std::format("{0:0>6}", user_id); }
+    [[nodiscard]] auto get_formatted_ID() const { return std::format("{0:0>6}", user_id); }
 
     [[nodiscard]] auto get_role() const { return user_role; }
     inline void set_role(const auto& new_value) { user_role = new_value; }
@@ -89,14 +90,36 @@ class User {
 };
 
 namespace {
+[[nodiscard]] static auto enter_password() {
+    std::string passw;
+    char inp;
+
+    while (true) {
+        inp = _getch();
+
+        switch (inp) {
+            case Keys::ENTER:
+                std::cout << '\n';
+                return passw;
+            case Keys::BACKSPACE:
+                if (!passw.empty()) {
+                    passw.pop_back();
+                    std::cout << "\b \b";
+                }
+                continue;
+        }
+        passw.push_back(inp);
+        std::cout << '*';
+    }
+}
+
 [[nodiscard]] static User registration() {
-    std::println("{:=^{}}", "Регистрация", Console::getSizeByChars().width);  // Header
+    std::println("{:=^{}}", " Регистрация ", Console::getSizeByChars().width);  // Header
 
     int role_buf;
-    std::string login_buf, passw_buf, rep_passw_buf;
+    std::string login_buf;
 
     std::print("Введите логин: ");
-    std::cin.ignore();
     std::getline(std::cin, login_buf);
     if (User::get_all_accs().contains(login_buf)) {
         Logger::Error("Аккаунт с таким логином уже существует");
@@ -104,44 +127,46 @@ namespace {
     }
 
     std::print("Введите пароль: ");
-    std::getline(std::cin, passw_buf);
+    const auto PASSW_BUF = enter_password();
 
     std::print("Повторите пароль: ");
-    std::getline(std::cin, rep_passw_buf);
-    if (passw_buf != rep_passw_buf) {
+    const auto REP_PASSW_BUF = enter_password();
+
+    if (PASSW_BUF != REP_PASSW_BUF) {
         Logger::Error("Пароли не совпадают");
         return registration();
     }
 
-    std::print("Выберите роль:\n1)Администратор\n2)Пользователь\n");
-    std::cin >> role_buf;
+    std::print("Выберите роль:\n1) Администратор\n2) Пользователь\n");
+    (std::cin >> role_buf).get();
 
-    const auto role = static_cast<User_role>(std::clamp(role_buf - 1, 0, 1));
-    return User(login_buf, passw_buf, role);
+    const auto ROLE = static_cast<User_role>(std::clamp(role_buf - 1, 0, 1));
+    return User(login_buf, PASSW_BUF, ROLE);
 }
 
 [[nodiscard]] static User login() {
-    std::println("{:=^{}}", "Логин", Console::getSizeByChars().width);  // Header
+    std::println("{:=^{}}", " Логин ", Console::getSizeByChars().width);  // Header
 
-    std::string login_buf, passw_buf;
+    std::string login_buf;
     std::print("Введите логин: ");
-    std::cin.ignore();
     std::getline(std::cin, login_buf);
-    if (not User::get_all_accs().contains(login_buf)) {
+
+    if (!User::get_all_accs().contains(login_buf)) {
         Logger::Error("Аккаунта с таким логином несуществует");
         return login();
     }
-    const auto& user_data = User::get_all_accs().at(login_buf);
-    const auto user_passw = user_data.at("Password").get<std::size_t>();
+    const auto& USER_DATA = User::get_all_accs().at(login_buf);
+    const auto USER_PASSW = USER_DATA.at("Password").get<std::size_t>();
 
     std::print("Введите пароль: ");
-    std::getline(std::cin, passw_buf);
-    if (user_passw not_eq encrypt_str(passw_buf, login_buf.length())) {
+    const auto PASSW_BUF = enter_password();
+
+    if (USER_PASSW != encrypt_str(PASSW_BUF, login_buf.length())) {
         Logger::Error("Неверный пароль");
         return login();
     }
 
-    return User(login_buf, user_data);
+    return User(login_buf, USER_DATA);
 }
 }  // namespace
 
@@ -151,6 +176,6 @@ namespace {
 
     int input_buf;
     std::println("Хотите создать новый аккаунт?\n1)Да\n2)Нет");
-    std::cin >> input_buf;
+    (std::cin >> input_buf).get();
     return std::clamp(input_buf - 1, 0, 1) == 0 ? registration() : login();
 }

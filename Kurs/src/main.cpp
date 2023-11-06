@@ -1,3 +1,5 @@
+#include <conio.h>
+
 #include <memory>
 
 #include "../include/Book.hpp"
@@ -15,19 +17,7 @@ int main() {
 
     std::string windows_title = "Library App";      // dynamic titlebar buffer
     Console::Configure(windows_title, {960, 480});  // setup console with new title and size
-    Console::setFont(18);                           // console font resize
-
-    constexpr auto exit_callback = []() -> void {
-        int choice = -1;
-        std::print("Сохранить данные?\n1) Да\n2)Нет\n");
-        std::cin >> choice;
-        if (choice == 1) {
-            FileSystem::save(accs_fname, User::get_all_accs());
-            FileSystem::save(books_fname, Book::get_all_books());
-        }
-    };
-    std::at_quick_exit(exit_callback);
-    std::atexit(exit_callback);
+    Console::setFont(18, L"Cascadia Mono");         // console font resize
 
     //////////////////////////////////////////////////////////////////////////////
 
@@ -36,23 +26,34 @@ int main() {
 
     const auto user = authorize();
     Console::setTitle(windows_title + " | " + user.get_login());
+    SetConsoleCtrlHandler(
+        [](DWORD reason) -> BOOL {
+            if (reason == CTRL_CLOSE_EVENT) {
+                FileSystem::save(accs_fname, User::get_all_accs());
+                FileSystem::save(books_fname, Book::get_all_books());
+                system("cls");
 
-    std::unique_ptr<Library_as_user> lib;
-    if (user.is_admin())
-        lib = std::make_unique<Library_as_admin>();
-    else
-        lib = std::make_unique<Library_as_user>();
+                return true;
+            }
+        },
+        true);  // on close callback to save data only after successful login/reg
 
-    static const size_t MIN_IDX = 1, MAX_IDX = lib->get_menu_size();
-    static int choice = -1;
+    const auto library = [is_admin = user.is_admin()] {
+        return is_admin
+                   ? std::make_unique<Library_as_admin>()
+                   : std::make_unique<Library_as_user>();
+    }();
 
+    const auto MENU_ITEMS = std::move(library->get_menu().str());
+    static const size_t MIN_IDX = 1, MAX_IDX = library->get_menu_size();
+
+    int choice = 0;
     do {
         Console_wrapper::draw_frame('|', '-');
+        Console_wrapper::writeln(MENU_ITEMS);
+        const auto choice_buf = Console_wrapper::get_input<int>();
+        choice = std::clamp<int>(choice_buf, MIN_IDX, MAX_IDX);
 
-        Console_wrapper::writeln(lib->get_menu().str());
-        std::cin >> choice;
-        choice = std::clamp<int>(choice, MIN_IDX, MAX_IDX);
-
-        lib->do_at(choice);
-    } while (choice != -1);
+        library->do_at(choice);
+    } while (_getch() != Keys::ESCAPE);
 }
