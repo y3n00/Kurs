@@ -10,16 +10,17 @@
 #include "Console_wrapper.hpp"
 
 constexpr static auto MENU_ITEM_FMT = "{: >2}) {}\n";
+using choice_t = uint16_t;
 
 struct FUNCDEF {
     const char* name;
     void (*func)();
-    inline void invoke() const { func(); }
+    constexpr auto invoke() const { func(); }
 };
 
 class Library_as_user {
    public:
-    static inline const std::map<size_t, FUNCDEF> user_funcs{
+    static inline const std::map<choice_t, FUNCDEF> user_funcs{
         {1, {"просмотреть все данные", [] { Console_wrapper::writeln("user #1"); }}},
         {2, {"поиск данных", [] { Console_wrapper::writeln("user #2"); }}},
         {3, {"сортировка", [] { Console_wrapper::writeln("user #3"); }}},
@@ -34,7 +35,7 @@ class Library_as_user {
         return sstr;
     }
 
-    virtual void do_at(int idx) const {
+    virtual void do_at(choice_t idx) const {
         user_funcs.at(idx).invoke();
     }
 
@@ -47,7 +48,7 @@ class Library_as_user {
 
 class Library_as_admin : virtual public Library_as_user {
    public:
-    static inline const std::map<size_t, FUNCDEF> admin_funcs{
+    static inline const std::map<choice_t, FUNCDEF> admin_funcs{
         {4, {"просмотреть все учетные записи", [] { Console_wrapper::writeln("admin #1"); }}},
         {5, {"добавить учетную запись", [] { Console_wrapper::writeln("admin #2"); }}},
         {6, {"отредактировать учетную запись", [] { Console_wrapper::writeln("admin #3"); }}},
@@ -62,7 +63,7 @@ class Library_as_admin : virtual public Library_as_user {
         return sstr;
     }
 
-    void do_at(int idx) const override {
+    void do_at(choice_t idx) const override {
         if (idx <= Library_as_user::get_menu_size())
             Library_as_user::do_at(idx);
         else

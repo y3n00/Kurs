@@ -10,12 +10,14 @@
 #include "Log.hpp"
 #include "thirdparty/json.hpp"
 
+constexpr static auto HEADER_FMT = "{:=^{}}";
+
 enum User_role : uint16_t {
     admin = 0,
     user
 };
 
-[[nodiscard]] auto encrypt_str(std::string_view arg, size_t key) {  // caesar + hash
+[[nodiscard]] size_t encrypt_str(std::string_view arg, size_t key) {  // caesar + hash
     return std::hash<std::string>{}(arg |
                                     std::views::transform([key](char ch) { return ch + key; }) |
                                     std::ranges::to<std::string>());
@@ -50,29 +52,29 @@ class User {
     }
 
    public:
-    User(std::string_view login,
-         const nlohmann::json& acc_data) : user_role{acc_data.at("Role").get<User_role>()},
-                                           user_id{acc_data.at("ID").get<size_t>()},
-                                           user_encrypted_passw{acc_data.at("Password").get<size_t>()},
-                                           user_login{login} {}
+    User(std::string_view login, const nlohmann::json& acc_data)
+        : user_role{acc_data.at("Role").get<User_role>()},
+          user_id{acc_data.at("ID").get<size_t>()},
+          user_encrypted_passw{acc_data.at("Password").get<size_t>()},
+          user_login{login} {}
 
-    User(std::string_view login,
-         std::string_view passw,
-         User_role ROLE) : user_role{ROLE},
-                           user_encrypted_passw{encrypt_str(passw, login.length())},
-                           user_login{login} {
+    User(std::string_view login, std::string_view passw, User_role ROLE)
+        : user_role{ROLE},
+          user_encrypted_passw{encrypt_str(passw, login.length())},
+          user_login{login} {
         to_global_json();
     }
 
-    User(User&& other_user) noexcept : user_role{other_user.user_role},
-                                       user_id{other_user.user_id},
-                                       user_encrypted_passw{other_user.user_encrypted_passw},
-                                       user_login{other_user.user_login} {}
+    User(User&& other_user) noexcept
+        : user_role{other_user.user_role},
+          user_id{other_user.user_id},
+          user_encrypted_passw{other_user.user_encrypted_passw},
+          user_login{other_user.user_login} {}
 
     ~User() = default;
 
     [[nodiscard]] auto is_admin() const { return user_role == User_role::admin; }
-    [[nodiscard]] auto get_formatted_ID() const { return std::format("{0:0>6}", user_id); }
+    [[nodiscard]] auto get_formatted_ID() const { return std::format("{:0>6}", user_id); }
 
     [[nodiscard]] auto get_role() const { return user_role; }
     inline void set_role(const auto& new_value) { user_role = new_value; }
@@ -114,7 +116,7 @@ namespace {
 }
 
 [[nodiscard]] static User registration() {
-    std::println("{:=^{}}", " Регистрация ", Console::getSizeByChars().width);  // Header
+    std::println(HEADER_FMT, " Регистрация ", Console::getSizeByChars().width);  // Header
 
     int role_buf;
     std::string login_buf;
@@ -140,12 +142,12 @@ namespace {
     std::print("Выберите роль:\n1) Администратор\n2) Пользователь\n");
     (std::cin >> role_buf).get();
 
-    const auto ROLE = static_cast<User_role>(std::clamp(role_buf - 1, 0, 1));
+    const User_role ROLE = role_buf - 1 ? User_role::user : User_role::admin;
     return User(login_buf, PASSW_BUF, ROLE);
 }
 
 [[nodiscard]] static User login() {
-    std::println("{:=^{}}", " Логин ", Console::getSizeByChars().width);  // Header
+    std::println(HEADER_FMT, " Логин ", Console::getSizeByChars().width);  // Header
 
     std::string login_buf;
     std::print("Введите логин: ");
@@ -175,7 +177,7 @@ namespace {
         return registration();
 
     int input_buf;
-    std::println("Хотите создать новый аккаунт?\n1)Да\n2)Нет");
+    std::println("Хотите создать новый аккаунт?\n1) Да\n2) Нет");
     (std::cin >> input_buf).get();
-    return std::clamp(input_buf - 1, 0, 1) == 0 ? registration() : login();
+    return input_buf == 1 ? registration() : login();
 }

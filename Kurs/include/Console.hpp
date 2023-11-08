@@ -7,7 +7,7 @@
 #include <string>
 #include <string_view>
 
-#define GETTER [[nodiscard]] inline auto
+#define GETTER [[nodiscard]] inline decltype(auto)
 #define GETTER_T(Ty) [[nodiscard]] inline Ty
 #define SETTER inline void
 
@@ -15,7 +15,7 @@ namespace Console {
 template <std::integral T>
 struct SZ {
     T width = -1, height = -1;
-    SZ() = default;
+    constexpr SZ() = default;
     constexpr SZ(T&& w, T&& h) : width{w}, height{h} {}
     constexpr SZ(const T& w, const T& h) : width{w}, height{h} {}
     constexpr operator bool() const {
@@ -79,7 +79,7 @@ SETTER toggleCursor(bool show) {
 }
 
 SETTER setCursorPos(const Console::SZ<int16_t>& place) {
-    const auto [newX, newY] = place;
+    const auto& [newX, newY] = place;
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), {newX, newY});
 }
 
