@@ -27,9 +27,10 @@ int main() {
     SetConsoleCP(65001);        // encoding for ru lang
     SetConsoleOutputCP(65001);  //
 
-    std::string windows_title = "Library App";      // titlebar buffer
-    Console::setFont(18, L"Cascadia Mono");         // font resize
-    Console::Configure(windows_title, {800, 600});  // setup console
+    const std::string window_title = "Library App";  // titlebar buffer
+    Console::setFont(18, L"Cascadia Mono");          // font resize
+    Console::Configure(window_title, {800, 600});    // setup console
+    Console_wrapper::set_frame_border('|', '-');
 
     //////////////////////////////////////////////////////////////////////////////
 
@@ -37,7 +38,7 @@ int main() {
     User::load_accounts(accs_fname);
 
     const auto user = authorize();
-    Console::setTitle(windows_title + " | " + user.get_login());
+    Console::setTitle(window_title + " | " + user.get_login());
     SetConsoleCtrlHandler(on_exit_callback, true);  // only after successful login/reg
 
     const auto library = [is_admin = user.is_admin()] {
@@ -46,16 +47,19 @@ int main() {
     }();
 
     static const std::string MENU_ITEMS{library->get_menu().str()};
-    static const choice_t MIN_IDX = 1, MAX_IDX = library->get_menu_size();
+    static const uint16_t MIN_IDX = 0, MAX_IDX = library->get_menu_size() - 1;
 
-    choice_t choice = 0;
     do {
-        Console_wrapper::draw_frame('|', '-');
+        Console_wrapper::draw_frame();
         Console_wrapper::writeln(MENU_ITEMS);
-        const auto INPUT = Console_wrapper::get_input<choice_t>();
-        choice = std::clamp(INPUT, MIN_IDX, MAX_IDX);
+        const auto choice = std::clamp<uint16_t>(Console_wrapper::get_input<uint16_t>() - 1, MIN_IDX, MAX_IDX);
 
         Console_wrapper::clear_screen();
         library->do_at(choice);
     } while (_getch() != Keys::ESCAPE);
 }
+
+//! TODO
+// 1) functions
+// 2) vertical overflow in write()
+// 3) scrolling by arrows

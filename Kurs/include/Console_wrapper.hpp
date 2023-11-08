@@ -35,13 +35,13 @@ enum Keys : int {
 
 class Console_wrapper {
    private:
-    static inline char vert_border, hor_border;
+    static inline char vert_symb, hor_symb;
     static constexpr inline uint8_t BORDER_PADDING = 2;
 
-    [[nodiscard]] static inline auto get_lines(std::string_view str) {
+    [[nodiscard]] static inline auto split_lines(std::string_view str) {
         std::vector<std::string> strs;
         strs.reserve(50);
-        std::stringstream sstr{std::move(std::string(str))};
+        std::stringstream sstr{str.data()};
 
         std::string buf;
         while (std::getline(sstr, buf))
@@ -50,7 +50,7 @@ class Console_wrapper {
         return strs;
     }
 
-    static auto put_str(std::string_view str, const Console::SZ<int16_t>& place) {
+    static inline void put_str(std::string_view str, const Console::SZ<int16_t>& place) {
         Console::setCursorPos(place);
         std::cout << str;
     }
@@ -64,13 +64,16 @@ class Console_wrapper {
     }
 
    public:
-    static void draw_frame(char vert, char hor) {
-        vert_border = vert, hor_border = hor;
+    static void set_frame_border(char vert_, char hor_) {
+        vert_symb = vert_, hor_symb = hor_;
+    }
+
+    static void draw_frame() {
         static constexpr Console::SZ<int16_t> DEFAULT_PLACE{1, 1};
 
         const auto [CON_WIDTH, CON_HEIGHT] = Console::getSizeByChars();
-        const auto HOR_BORDER = std::string(CON_WIDTH, hor);
-        const auto VERT_BORDER = vert + std::string(CON_WIDTH - BORDER_PADDING, ' ') + vert;
+        const auto HOR_BORDER = std::string(CON_WIDTH, hor_symb);
+        const auto VERT_BORDER = vert_symb + std::string(CON_WIDTH - BORDER_PADDING, ' ') + vert_symb;
 
         put_str(HOR_BORDER, {0, 0});                        // top line
         put_str(HOR_BORDER, {0, int16_t(CON_HEIGHT - 1)});  // bottom line
@@ -81,38 +84,39 @@ class Console_wrapper {
     }
 
     static void write(std::string_view msg) {
-        const auto MSG_BY_LINES = get_lines(msg);
+        const auto MSG_BY_LINES = split_lines(msg);
         if (MSG_BY_LINES.empty())
             return;
 
         const auto [CON_WIDTH, CON_HEIGHT] = Console::getSizeByChars();
         const auto [CURSOR_X, CURSOR_Y] = Console::getWindowInfo().dwCursorPosition;  // current cursor position
-
         const int32_t ACTUAL_CON_WIDTH = CON_WIDTH - BORDER_PADDING;
+        const int32_t ACTUAL_CON_HEIGHT = CON_HEIGHT - BORDER_PADDING;
+
         for (const auto& [idx, line] : MSG_BY_LINES | std::views::enumerate) {
             const Console::SZ PLACE(CURSOR_X, int16_t(CURSOR_Y + idx));
-            const size_t EXTRA_SPACE_HOR = ACTUAL_CON_WIDTH - (CURSOR_X + line.length());
+            const size_t FITTED_SIZE = ACTUAL_CON_WIDTH - (CURSOR_X + line.length());
 
-            if (EXTRA_SPACE_HOR >= 0) {  // if line fully fits
+            if (FITTED_SIZE >= 0) {  // if line fully fits
                 put_str(line, PLACE);
             } else {
-                const size_t FITTED_SIZE = msg.length() + EXTRA_SPACE_HOR;  // EXTRA_SPACE is negative
-                put_str(line.substr(0, FITTED_SIZE - 3) + "...", PLACE);    // -3 for "..."
+                const size_t FITTED_SIZE = msg.length() + FITTED_SIZE;    // FITTED_SIZE is negative
+                put_str(line.substr(0, FITTED_SIZE - 3) + "...", PLACE);  // -3 for "..."
             }
         }
     }
 
-    static void writeln(std::string_view msg) {
+    static inline void writeln(std::string_view msg) {
         write(msg);
         new_line();
     }
 
     template <typename T>
-    static T get_input() {
+    [[nodiscard]] static T get_input() {
         const auto [CON_WIDTH, CON_HEIGHT] = Console::getSizeByChars();
         const auto [CURSOR_X, CURSOR_Y] = Console::getWindowInfo().dwCursorPosition;
 
-        put_str(std::string(CON_WIDTH - 2, hor_border), {1, int16_t(CON_HEIGHT - 3)});
+        put_str(std::string(CON_WIDTH - 2, hor_symb), {1, int16_t(CON_HEIGHT - 3)});
         put_str("Ввод: ", {1, int16_t(CON_HEIGHT - 2)});
 
         T buf{};
@@ -128,6 +132,6 @@ class Console_wrapper {
 
     static inline void clear_screen() {
         system("cls");
-        draw_frame(vert_border, hor_border);
+        draw_frame();
     }
 };
