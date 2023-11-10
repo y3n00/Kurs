@@ -61,7 +61,7 @@ GETTER getFontSize() {
     return cfi.dwFontSize.X;
 }
 
-SETTER setFont(int newFontSize, const wchar_t* newFont = L"Consolas") {
+SETTER setFont(int16_t newFontSize, const wchar_t* newFont = L"Consolas") {
     auto cfi = CONSOLE_FONT_INFOEX{.cbSize = sizeof(CONSOLE_FONT_INFOEX)};
     GetCurrentConsoleFontEx(GetStdHandle(STD_OUTPUT_HANDLE), NULL, &cfi);
 
@@ -100,5 +100,10 @@ SETTER Configure(std::string_view title, const SZ<uint16_t>& size) {
 
     setTitle(title);
     setSizeByPixels(size);
+}
+
+SETTER putStr(std::string_view str, const SZ<int16_t>& place) {
+    setCursorPos(place);
+    std::cout << str;
 }
 }  // namespace Console

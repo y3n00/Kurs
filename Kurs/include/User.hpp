@@ -118,7 +118,7 @@ namespace {
 [[nodiscard]] static User registration() {
     std::println(HEADER_FMT, " Регистрация ", Console::getSizeByChars().width);  // Header
 
-    int role_buf;
+    int16_t role_buf;
     std::string login_buf;
 
     std::print("Введите логин: ");
@@ -176,7 +176,7 @@ namespace {
     if (User::get_all_accs().empty())
         return registration();
 
-    int input_buf;
+    int16_t input_buf;
     std::println("Хотите создать новый аккаунт?\n1) Да\n2) Нет");
     (std::cin >> input_buf).get();
     return input_buf == 1 ? registration() : login();

@@ -28,7 +28,7 @@ int main() {
     SetConsoleOutputCP(65001);  //
 
     const std::string window_title = "Library App";  // titlebar buffer
-    Console::setFont(18, L"Cascadia Mono");          // font resize
+    Console::setFont(18, L"Cascadia Mono");          // font setup
     Console::Configure(window_title, {800, 600});    // setup console
     Console_wrapper::set_frame_border('|', '-');
 
@@ -48,13 +48,14 @@ int main() {
 
     static const std::string MENU_ITEMS{library->get_menu().str()};
     static const uint16_t MIN_IDX = 0, MAX_IDX = library->get_menu_size() - 1;
+    const auto menu_choice_clamp = std::bind(std::clamp<uint16_t>, std::placeholders::_1, MIN_IDX, MAX_IDX);
 
     do {
         Console_wrapper::draw_frame();
         Console_wrapper::writeln(MENU_ITEMS);
-        const auto choice = std::clamp<uint16_t>(Console_wrapper::get_input<uint16_t>() - 1, MIN_IDX, MAX_IDX);
+        const auto choice = menu_choice_clamp(Console_wrapper::get_input<uint16_t>() - 1);
 
-        Console_wrapper::clear_screen();
+        Console_wrapper::clear_border();
         library->do_at(choice);
     } while (_getch() != Keys::ESCAPE);
 }

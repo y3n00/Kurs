@@ -12,15 +12,15 @@ class Random {
     Random(const Random&) = delete;
     Random& operator=(const Random&) = delete;
 
-    [[nodiscard]] T get() {
+    [[nodiscard]] T get() const {
         return std::uniform_int_distribution()(gen);
     }
 
-    [[nodiscard]] T get(T maxN) {
+    [[nodiscard]] T get(T maxN) const {
         return std::uniform_int_distribution(T{}, maxN)(gen);
     }
 
-    [[nodiscard]] T get(T minN, T maxN) {
+    [[nodiscard]] T get(T minN, T maxN) const {
         return std::uniform_int_distribution(minN, maxN)(gen);
     }
 
