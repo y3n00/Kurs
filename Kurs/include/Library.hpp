@@ -25,7 +25,7 @@ void view_all_books() noexcept {
         books_vec.emplace_back(title, data);
 
     constexpr auto get_title = [](const Book& book) { return book.get_title(); };
-    const size_t s = Console_wrapper::vector_selection<Book, std::string>(books_vec, get_title);
+    const size_t s = Console_wrapper::vec_selection<Book>(books_vec, get_title);
 }
 
 void search_book() {
@@ -36,36 +36,63 @@ void search_book() {
     if (all_books_json.contains(book_to_find)) {
         Console_wrapper::writeln("Книга найдена!");
         const auto book_data = Book(book_to_find, all_books_json.at(book_to_find)).get_data();
-        Console_wrapper::writeln(book_data);
+        Console_wrapper::write_vec(book_data);
     } else {
         Console_wrapper::writeln("Такой книги нет!");
-        return;
     }
 }
 }  // namespace USER_Functions
 
 namespace ADMIN_Functions {
 void print_all_users() {
-    Console_wrapper::clear_border();
-    const auto& all_users_json = User::get_all_accs();
-    for (auto&& [idx, acc] : all_users_json.items() | std::views::enumerate) {
-        const auto& [login, js_data] = acc;
-        const User user(login, js_data);
-    }
+    Console_wrapper::draw_frame();
+    for (auto&& [login, js_data] : User::get_all_accs().items())
+        Console_wrapper::write_vec(User(login, js_data).get_data(), false);
 }
 
 void edit_user() {
-    const auto& all_users_json = User::get_all_accs();
-    std::vector<User> users_vec;
-    users_vec.reserve(all_users_json.size());
-    for (const auto& [login, data] : all_users_json.items())
-        users_vec.emplace_back(login, data);
+    const auto js_to_user = [](auto&& js_item) {
+        auto&& [login, data] = js_item;
+        return User(login, data);
+    };
     constexpr auto get_login = [](const User& user) { return user.get_login(); };
-    const size_t s = Console_wrapper::vector_selection<User, std::string>(users_vec, get_login);
+
+    auto users_vec = User::get_all_accs().items() |
+                     std::views::transform(js_to_user) |
+                     std::ranges::to<std::vector<User>>();
+
+    User& user = users_vec[Console_wrapper::vec_selection<User>(users_vec, get_login)];
+    Console_wrapper::clear_border();
+    Console_wrapper::writeln(std::format("Выбранный пользователь: {}", user.get_login()));
+    Console_wrapper::write_vec(user.get_data());
+    const uint32_t selection = Console_wrapper::get_input<uint16_t>() - 1;
+    switch (selection) {
+        case 0:
+            Console_wrapper::write("Введите новый логин");
+            user.set_login(Console_wrapper::get_input<std::string>());
+            break;
+        case 1:
+            Console_wrapper::write("Введите новый пароль");
+            user.set_password(Console_wrapper::get_input<std::string>());
+            break;
+        case 2:
+            Console_wrapper::write("Роль была изменена!");
+            const auto NEW_ROLE = !static_cast<bool>(user.get_role());
+            user.set_role(NEW_ROLE);
+            break;
+    }
+    user.update_data();
 }
 }  // namespace ADMIN_Functions
 
-class Library_as_user {
+struct ILibrary {
+    virtual std::vector<std::string> get_menu() const = 0;
+    virtual void do_at(uint16_t idx) const = 0;
+    virtual size_t get_menu_size() const = 0;
+    virtual ~ILibrary() = default;
+};
+
+class Library_as_user : public virtual ILibrary {
     static inline const std::vector<FUNCTION> user_funcs{
         {"просмотреть все книги", USER_Functions::view_all_books},
         {"поиск книги", USER_Functions::search_book},
@@ -73,42 +100,36 @@ class Library_as_user {
     };
 
    public:
-    [[nodiscard]] virtual std::stringstream get_menu() const {
-        std::stringstream sstr;
-
-        for (const auto& [idx, FUNCTION] : user_funcs | std::views::enumerate)
-            sstr << std::format(MENU_ITEM_FMT, idx + 1, FUNCTION.name);
-
-        return sstr;
+    [[nodiscard]] std::vector<std::string> get_menu() const override {
+        std::vector<std::string> strings;
+        for (auto&& func : user_funcs)
+            strings.emplace_back(func.name);
+        return strings;
     }
 
-    inline virtual void do_at(uint16_t idx) const {
+    inline void do_at(uint16_t idx) const override {
         user_funcs.at(idx).invoke();
     }
 
-    [[nodiscard]] inline virtual size_t get_menu_size() const {
+    [[nodiscard]] inline size_t get_menu_size() const override {
         return user_funcs.size();
     }
-
-    virtual ~Library_as_user() = default;
 };
 
-class Library_as_admin : virtual public Library_as_user {
+class Library_as_admin : virtual public ILibrary, public Library_as_user {
     static inline const std::vector<FUNCTION> admin_funcs{
         {"просмотреть все учетные записи", ADMIN_Functions::print_all_users},
         {"добавить учетную запись", [] { Console_wrapper::writeln("admin #2"); }},
-        {"отредактировать учетную запись", [] { Console_wrapper::writeln("admin #3"); }},
+        {"отредактировать учетную запись", ADMIN_Functions::edit_user},
         {"удалить учетную запись", [] { Console_wrapper::writeln("admin #4"); }},
     };
 
    public:
-    [[nodiscard]] std::stringstream get_menu() const override {
-        const auto menu_delta = Library_as_user::get_menu_size();
-        auto sstr = Library_as_user::get_menu();
-
-        for (const auto& [idx, FUNCTION] : admin_funcs | std::views::enumerate)
-            sstr << std::format(MENU_ITEM_FMT, idx + menu_delta + 1, FUNCTION.name);
-        return sstr;
+    [[nodiscard]] std::vector<std::string> get_menu() const override {
+        auto&& menu = std::move(Library_as_user::get_menu());
+        for (auto&& func : admin_funcs)
+            menu.emplace_back(func.name);
+        return menu;
     }
 
     inline void do_at(uint16_t idx) const override {

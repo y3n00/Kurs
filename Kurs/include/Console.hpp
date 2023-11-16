@@ -14,14 +14,10 @@
 namespace Console {
 template <std::integral T>
 struct SZ {
-    T width = -1, height = -1;
-    constexpr SZ() = default;
+    T width, height;
+    constexpr SZ() : width{}, height{} {}
     constexpr SZ(T&& w, T&& h) : width{w}, height{h} {}
     constexpr SZ(const T& w, const T& h) : width{w}, height{h} {}
-    constexpr operator bool() const {
-        static constexpr T NOT_SETTED = -1;
-        return (width != NOT_SETTED && height != NOT_SETTED);
-    }
 };
 
 GETTER getSizeByPixels() {
@@ -93,7 +89,7 @@ SETTER setTitle(std::string_view newTitle) {
     SetConsoleTitle(std::wstring{newTitle.begin(), newTitle.end()}.c_str());
 }
 
-SETTER Configure(std::string_view title, const SZ<uint16_t>& size) {
+SETTER configure(std::string_view title, const SZ<uint16_t>& size) {
     DWORD dwMode{};
     GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &dwMode);
     SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), (dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING));
@@ -105,5 +101,12 @@ SETTER Configure(std::string_view title, const SZ<uint16_t>& size) {
 SETTER putStr(std::string_view str, const SZ<int16_t>& place) {
     setCursorPos(place);
     std::cout << str;
+}
+
+GETTER getCursorPosition() {
+    CONSOLE_SCREEN_BUFFER_INFO consoleInfo{};
+    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &consoleInfo);
+    const auto [X, Y] = consoleInfo.dwCursorPosition;
+    return SZ<int16_t>{X, Y};
 }
 }  // namespace Console

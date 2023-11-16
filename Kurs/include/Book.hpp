@@ -96,14 +96,14 @@ class Book {
     void set_publisher(std::string_view new_value) { book_publisher = new_value; }
 
     [[nodiscard]] auto get_data() const {
-        std::stringstream sstr;
-        sstr << "Название: " << book_title << '\n';
-        sstr << "Автор: " << author_name << '\n';
-        sstr << "Издатель: " << book_publisher << '\n';
-        sstr << "Год выпуска: " << book_year << '\n';
-        sstr << "Кол-во страниц: " << book_pages << '\n';
-        sstr << "Статус: " << (in_library ? "в библиотеке" : "у читателя") << '\n';
-        return sstr.str();
+        return std::vector<std::string>{
+            std::format("Название: {}", book_title),
+            std::format("Автор: {}", author_name),
+            std::format("Издатель: {}", book_publisher),
+            std::format("Год выпуска: {}", book_year),
+            std::format("Кол-во страниц: {}", book_pages),
+            std::format("Статус: {}", (in_library ? "в библиотеке" : "у читателя")),
+        };
     }
 };
 

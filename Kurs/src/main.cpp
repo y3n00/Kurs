@@ -23,13 +23,13 @@ BOOL WINAPI on_exit_callback(DWORD reason) {
 }
 
 int main() {
-    system("cls");
+    system("cls");              // clear screen
     SetConsoleCP(65001);        // encoding for ru lang
     SetConsoleOutputCP(65001);  //
 
     const std::string window_title = "Library App";  // titlebar buffer
     Console::setFont(18, L"Cascadia Mono");          // font setup
-    Console::Configure(window_title, {800, 600});    // setup console
+    Console::configure(window_title, {800, 600});    // setup console
     Console_wrapper::set_frame_border('|', '-');
 
     //////////////////////////////////////////////////////////////////////////////
@@ -37,30 +37,24 @@ int main() {
     Book::load_books(books_fname);
     User::load_accounts(accs_fname);
 
-    const auto user = authorize();
-    Console::setTitle(window_title + " | " + user.get_login());
+    const auto USER = authorize();
+    Console::setTitle(window_title + " | " + USER.get_login());
     SetConsoleCtrlHandler(on_exit_callback, true);  // only after successful login/reg
 
-    const auto library = [is_admin = user.is_admin()] {
+    const std::unique_ptr<ILibrary> LIBRARY = [is_admin = USER.is_admin()] {
         return is_admin ? std::make_unique<Library_as_admin>()
                         : std::make_unique<Library_as_user>();
     }();
 
-    static const std::string MENU_ITEMS{library->get_menu().str()};
-    static const uint16_t MIN_IDX = 0, MAX_IDX = library->get_menu_size() - 1;
-    const auto menu_choice_clamp = std::bind(std::clamp<uint16_t>, std::placeholders::_1, MIN_IDX, MAX_IDX);
+    const std::vector<std::string> MENU_ITEMS = LIBRARY->get_menu();
+    static const uint16_t MIN_IDX = 0, MAX_IDX = MENU_ITEMS.size() - 1;
+    auto&& MENU_CHOICE_CLAMP = std::bind(std::clamp<uint16_t>, std::placeholders::_1, MIN_IDX, MAX_IDX);
 
     do {
         Console_wrapper::draw_frame();
-        Console_wrapper::writeln(MENU_ITEMS);
-        const auto choice = menu_choice_clamp(Console_wrapper::get_input<uint16_t>() - 1);
-
-        Console_wrapper::clear_border();
-        library->do_at(choice);
+        Console_wrapper::write_vec(MENU_ITEMS);
+        const auto choice = MENU_CHOICE_CLAMP(Console_wrapper::get_input<uint16_t>() - 1);
+        Console_wrapper::clear_border();  // clear screen b4 doin smth
+        LIBRARY->do_at(choice);
     } while (_getch() != Keys::ESCAPE);
 }
-
-//! TODO
-// 1) functions
-// 2) vertical overflow in write()
-// 3) scrolling by arrows

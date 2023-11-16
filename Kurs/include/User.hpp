@@ -56,7 +56,9 @@ class User {
         : user_role{acc_data.at("Role").get<User_role>()},
           user_id{acc_data.at("ID").get<size_t>()},
           user_encrypted_passw{acc_data.at("Password").get<size_t>()},
-          user_login{login} {}
+          user_login{login} {
+        to_global_json();
+    }
 
     User(std::string_view login, std::string_view passw, User_role ROLE)
         : user_role{ROLE},
@@ -88,7 +90,22 @@ class User {
     }
 
     [[nodiscard]] auto get_login() const { return user_login; }
-    inline void set_login(const auto& new_value) { user_login = new_value; }
+    inline void set_login(const auto& new_value) {
+        all_accs.erase(user_login);
+        user_login = new_value;
+    }
+
+    [[nodiscard]] auto get_data() const {
+        return std::vector<std::string>{
+            std::format("Логин: {}", user_login),
+            std::format("Хеш пароля: {}", user_encrypted_passw),
+            std::format("Статус: {}", (user_role == User_role::admin ? "админ" : "пользователь")),
+        };
+    }
+
+    inline void update_data() const {
+        to_global_json();
+    }
 };
 
 namespace {
