@@ -2,6 +2,19 @@
 #define NOMINMAX
 #include <conio.h>
 
+#include <algorithm>
+#include <functional>
+#include <iostream>
+#include <ranges>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "Console.hpp"
+#include "Log.hpp"
+
+constexpr inline auto ENUMED_ELEM_FMT = "{0: >2}) {1}";
+
 enum Keys : int16_t {
     BACKSPACE = 8,
     ENTER = 13,
@@ -23,23 +36,6 @@ enum Keys : int16_t {
     DOWN_ARR = 80,
 };
 
-#include <algorithm>
-#include <functional>
-#include <iostream>
-#include <ranges>
-#include <sstream>
-#include <string>
-#include <vector>
-
-#include "Console.hpp"
-#include "Log.hpp"
-
-#define EMPTY_CHECK(RANGE)                  \
-    if (RANGE.empty()) {                    \
-        writeln("Вектор пуст ¯\\_(ツ)_/¯"); \
-        return;                             \
-    }
-
 [[nodiscard]] inline auto split_lines(std::string_view str) {
     return str | std::views::split('\n') | std::ranges::to<std::vector<std::string>>();
 }
@@ -58,29 +54,32 @@ class Console_wrapper {
         Console::setCursorPos({1, Y_NEXT});
     }
 
-    static void write_vec(const std::vector<std::string>& vec, bool enumerate = true) {
-        EMPTY_CHECK(vec);
+    static void vec_print(const std::vector<std::string>& vec, bool enumerate = true) {
+        if (vec.empty()) {
+            Logger::Error("Вектор пуст!");
+            return;
+        }
         const auto [CON_WIDTH, CON_HEIGHT] = Console::getSizeByChars();
         const auto [CURSOR_X, CURSOR_Y] = Console::getCursorPosition();
         const uint16_t ACTUAL_HEIGHT = CON_HEIGHT - BORDER_PADDING;
 
-        const int32_t VERT_SIZE_DIFF = ACTUAL_HEIGHT - vec.size();
+        const int16_t VERT_SIZE_DIFF = ACTUAL_HEIGHT - vec.size();
         const bool VEC_IS_BIGGER = VERT_SIZE_DIFF < 0;
-        const uint32_t MAX_IDX = VEC_IS_BIGGER ? ACTUAL_HEIGHT - 1 : vec.size();
+        const uint16_t MAX_IDX = VEC_IS_BIGGER ? ACTUAL_HEIGHT - 1 : vec.size();
 
         auto&& ENUMED = vec | std::views::enumerate;
-        auto&& print_subrange = [&](auto&& enumed_sub_range) -> void {
-            for (auto&& [idx, data] : enumed_sub_range)
-                writeln((enumerate ? std::format("{0}", data) : std::format("{0: >2}) {1}", idx + 1, data)));
+        auto&& print_subrange = [enumerate](auto&& enumed_subrange) -> void {
+            for (auto&& [idx, data] : enumed_subrange)
+                writeln((enumerate ? std::format(ENUMED_ELEM_FMT, idx + 1, data) : std::format("{}", data)));
         };
 
         if (!VEC_IS_BIGGER)
             print_subrange(ENUMED);
         else {
             auto&& CHUNKED = ENUMED | std::views::chunk(MAX_IDX);
-            const size_t N_PAGES = CHUNKED.size();
-            auto&& PAGE_CLAMP = std::bind(std::clamp<uint16_t>, std::placeholders::_1, 0, N_PAGES - 1);
-            int32_t current_page = 0, pressed_key = 0;
+            const uint16_t N_PAGES = CHUNKED.size();
+            auto&& PAGE_CLAMP = std::bind(std::clamp<int16_t>, std::placeholders::_1, 0, N_PAGES - 1);
+            int16_t current_page = 0, pressed_key = 0;
             do {
                 clear_border();
                 if (pressed_key == Keys::LEFT_ARR)
@@ -99,15 +98,14 @@ class Console_wrapper {
 
     static void draw_frame() {
         const auto [CON_WIDTH, CON_HEIGHT] = Console::getSizeByChars();
-        const std::string HOR_BORDER = std::string(CON_WIDTH, hor_symb);
+        const std::string HOR_BORDER(CON_WIDTH, hor_symb);
         const std::string VERT_BORDER = vert_symb + std::string(CON_WIDTH - BORDER_PADDING, ' ') + vert_symb;
-        const auto MAX_Y_POS = int16_t(CON_HEIGHT - 1);  //-1 for 0-indexed count
+        const auto MAX_Y_POS = int16_t(CON_HEIGHT - 1);  // -1 for 0-indexed count
 
         Console::putStr(HOR_BORDER, {0, 0});          // top line
         Console::putStr(HOR_BORDER, {0, MAX_Y_POS});  // bottom line
-
-        for (int16_t i = 1; i < MAX_Y_POS; i++)    // vertical borders
-            Console::putStr(VERT_BORDER, {0, i});  //
+        for (int16_t i = 1; i < MAX_Y_POS; i++)       // vertical borders
+            Console::putStr(VERT_BORDER, {0, i});     //
         Console::setCursorPos({1, 1});
     }
 
@@ -117,11 +115,11 @@ class Console_wrapper {
         const int16_t ACTUAL_WIDTH = CON_WIDTH - BORDER_PADDING;
         const int32_t FITTED_PART = ACTUAL_WIDTH - (CURSOR_X + str.length());
 
-        if (FITTED_PART >= 0)  // if line horizontaly fits
-            writeln(str);
+        if (FITTED_PART >= 0)  // if line fits horizontaly
+            std::cout << str;
         else {
-            const auto FITTED_SIZE = -FITTED_PART + str.length();          // FITTED_SIZE is negative
-            writeln(std::string{str}.substr(0, FITTED_SIZE - 3) + "...");  // -3 for "..."
+            const auto FITTED_SIZE = FITTED_PART + str.length();  // FITTED_SIZE is negative
+            std::cout << str.substr(0, FITTED_SIZE - 3) << "...";  // -3 for "..."
         }
     }
 
@@ -147,32 +145,73 @@ class Console_wrapper {
         return buf;
     }
 
-    template <typename T>  // TODO PAGES
-    [[nodiscard]] static uint32_t vec_selection(const std::vector<T>& vec, std::string (*get_value)(const T& obj) = nullptr) {
-        EMPTY_CHECK(vec);
+    [[nodiscard]] static std::string vec_selection(const std::vector<std::string>& vec) {
+        if (vec.empty()) {
+            Logger::Error("Вектор пуст!");
+            return {};
+        }
+        int32_t return_value = -1;
         const auto [CON_WIDTH, CON_HEIGHT] = Console::getSizeByChars();
         const auto [CURSOR_X, CURSOR_Y] = Console::getCursorPosition();
-        const int32_t ACTUAL_HEIGHT = CON_HEIGHT - BORDER_PADDING;
-        const int32_t MIN_IDX = 0, MAX_IDX = vec.size() - 1;
-        auto&& SCOPED_CLAMP = std::bind(std::clamp<int32_t>, std::placeholders::_1, MIN_IDX, MAX_IDX);
+        const uint16_t ACTUAL_HEIGHT = CON_HEIGHT - BORDER_PADDING;
 
-        int32_t pressed_key = 0, current_selection = 0;
-        do {
+        const int32_t VERT_SIZE_DIFF = ACTUAL_HEIGHT - vec.size();
+        const bool VEC_IS_BIGGER = VERT_SIZE_DIFF < 0;
+        const uint32_t MAX_IDX = VEC_IS_BIGGER ? ACTUAL_HEIGHT - 1 : vec.size();
+        auto&& ENUMED = vec | std::views::enumerate;
+
+        const auto subrange_selection = [](auto&& subrange) -> int32_t {
             clear_border();
-            if (pressed_key == Keys::DOWN_ARR)
-                current_selection = SCOPED_CLAMP(--current_selection);
-            else if (pressed_key == Keys::UP_ARR)
-                current_selection = SCOPED_CLAMP(++current_selection);
-            for (auto&& [idx, data] : vec | std::views::enumerate) {
-                std::string str_buf;
-                if constexpr (std::is_same_v<T, std::string>)
-                    str_buf = std::format("{0: >2}) {1}", idx, data);
-                else
-                    str_buf = std::format("{0: >2}) {1}", idx, get_value(data));
-                current_selection == idx ? writeln('>' + str_buf) : writeln(str_buf);
-            }
-        } while ((pressed_key = _getch()) != Keys::ENTER);
-        return current_selection;
+            const auto IDX_MIN = std::get<0>(subrange.front());  // min index
+            const auto IDX_MAX = std::get<0>(subrange.back());   // max index
+            auto&& in_page_clamp = std::bind(std::clamp<int32_t>, std::placeholders::_1, IDX_MIN, IDX_MAX);
+            int scoped_idx = IDX_MIN, pressed_key = 0;
+            do {
+                clear_border();
+                if (pressed_key == Keys::DOWN_ARR)
+                    scoped_idx = in_page_clamp(++scoped_idx);
+                else if (pressed_key == Keys::UP_ARR)
+                    scoped_idx = in_page_clamp(--scoped_idx);
+                else if (pressed_key == Keys::ENTER)
+                    return scoped_idx;
+                else if (pressed_key == Keys::ESCAPE)
+                    return -1;
+
+                for (auto&& [idx, elem] : subrange) {
+                    const auto fmt = std::format(ENUMED_ELEM_FMT, idx, elem);
+                    scoped_idx == idx ? writeln('>' + fmt) : writeln(fmt);
+                }
+            } while (pressed_key = _getch());
+        };
+
+        if (!VEC_IS_BIGGER) {
+            do
+                return_value = subrange_selection(ENUMED);
+            while (return_value == -1);
+        } else {
+            auto&& CHUNKED = ENUMED | std::views::chunk(MAX_IDX);
+            const size_t N_PAGES = CHUNKED.size();
+            auto&& PAGE_CLAMP = std::bind(std::clamp<int16_t>, std::placeholders::_1, 0, N_PAGES - 1);
+            int16_t current_page = 0, pressed_key = 0;
+            do {
+                clear_border();
+                if (pressed_key == Keys::LEFT_ARR)
+                    current_page = PAGE_CLAMP(--current_page);
+                else if (pressed_key == Keys::RIGHT_ARR)
+                    current_page = PAGE_CLAMP(++current_page);
+
+                auto&& current_chunk = CHUNKED[current_page];
+                for (auto&& [idx, elem] : current_chunk)
+                    writeln(std::format(ENUMED_ELEM_FMT, idx, elem));
+                if (pressed_key == Keys::ENTER) {
+                    if ((return_value = subrange_selection(current_chunk)) != -1)
+                        break;
+                    writeln("Нажмите ESCAPE чтобы снова выбрать нужную страницу");
+                }
+                write(std::format("{} страница из {}", current_page + 1, N_PAGES));
+            } while (pressed_key = _getch());
+        }
+        return vec[return_value];
     }
 
     static inline void clear_border() {

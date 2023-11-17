@@ -4,11 +4,11 @@
 #include <windows.h>
 
 #include <concepts>
+#include <iostream>
 #include <string>
 #include <string_view>
 
 #define GETTER [[nodiscard]] inline decltype(auto)
-#define GETTER_T(Ty) [[nodiscard]] inline Ty
 #define SETTER inline void
 
 namespace Console {
@@ -23,17 +23,14 @@ struct SZ {
 GETTER getSizeByPixels() {
     RECT tempRect{};
     GetWindowRect(GetConsoleWindow(), &tempRect);
-    return SZ{
-        tempRect.right - tempRect.left,
-        tempRect.bottom - tempRect.top};
+    return SZ{tempRect.right - tempRect.left, tempRect.bottom - tempRect.top};
 }
 
 GETTER getSizeByChars() {
     CONSOLE_SCREEN_BUFFER_INFO csbi{};
     GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-    return SZ{
-        csbi.srWindow.Right - csbi.srWindow.Left + 1,
-        csbi.srWindow.Bottom - csbi.srWindow.Top + 1};
+    return SZ{csbi.srWindow.Right - csbi.srWindow.Left + 1,
+              csbi.srWindow.Bottom - csbi.srWindow.Top + 1};
 }
 
 SETTER setSizeByPixels(const SZ<uint16_t>& newSize) {
@@ -60,10 +57,8 @@ GETTER getFontSize() {
 SETTER setFont(int16_t newFontSize, const wchar_t* newFont = L"Consolas") {
     auto cfi = CONSOLE_FONT_INFOEX{.cbSize = sizeof(CONSOLE_FONT_INFOEX)};
     GetCurrentConsoleFontEx(GetStdHandle(STD_OUTPUT_HANDLE), NULL, &cfi);
-
     swprintf_s(cfi.FaceName, newFont);
     cfi.dwFontSize.Y = newFontSize;
-
     SetCurrentConsoleFontEx(GetStdHandle(STD_OUTPUT_HANDLE), NULL, &cfi);
 }
 
@@ -93,7 +88,6 @@ SETTER configure(std::string_view title, const SZ<uint16_t>& size) {
     DWORD dwMode{};
     GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &dwMode);
     SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), (dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING));
-
     setTitle(title);
     setSizeByPixels(size);
 }

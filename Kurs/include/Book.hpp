@@ -26,17 +26,6 @@ class Book {
     size_t book_id{global_book_id++}, last_reader{};
     std::string author_name{}, book_title{}, book_publisher{};
 
-    inline void to_global_json() const {
-        nlohmann::json& js = all_books[book_title];
-        js["Author"] = author_name;
-        js["Pages"] = book_pages;
-        js["ID"] = book_id;
-        js["Last reader"] = last_reader;
-        js["Publisher"] = book_publisher;
-        js["Year"] = book_year;
-        js["In library"] = in_library;
-    }
-
    public:
     Book(std::string_view title, const nlohmann::json& book_data)
         : author_name{book_data.at("Author").get<std::string>()},
@@ -46,7 +35,9 @@ class Book {
           last_reader{book_data.at("Last reader").get<size_t>()},
           book_publisher{book_data.at("Publisher").get<std::string>()},
           book_year{book_data.at("Year").get<uint16_t>()},
-          in_library{book_data.at("In library").get<bool>()} {}
+          in_library{book_data.at("In library").get<bool>()} {
+        update_data();
+    }
 
     Book(std::string_view title, bool in_lib,
          uint16_t year, uint16_t pages_num,
@@ -57,7 +48,7 @@ class Book {
           author_name{author},
           book_title{title},
           book_publisher{publisher} {
-        to_global_json();
+        update_data();
     }
 
     Book(Book&& other_book) noexcept
@@ -74,8 +65,8 @@ class Book {
 
     [[nodiscard]] auto get_id() const { return book_id; }
 
-    [[nodiscard]] auto get_status() const { return in_library; }
-    void set_status(bool new_value) { in_library = new_value; }
+    [[nodiscard]] auto is_in_library() const { return in_library; }
+    void change_status() { in_library = !in_library; }
 
     [[nodiscard]] auto get_year() const { return book_year; }
     void set_year(uint16_t new_value) { book_year = new_value; }
@@ -105,10 +96,15 @@ class Book {
             std::format("Статус: {}", (in_library ? "в библиотеке" : "у читателя")),
         };
     }
-};
 
-void create_book() {
-    bool in_lib;
-    uint16_t year, pages_num;
-    std::string title, author, publisher;
-}
+    void update_data() const {
+        nlohmann::json& js = all_books[book_title];
+        js["Author"] = author_name;
+        js["Pages"] = book_pages;
+        js["ID"] = book_id;
+        js["Last reader"] = last_reader;
+        js["Publisher"] = book_publisher;
+        js["Year"] = book_year;
+        js["In library"] = in_library;
+    }
+};

@@ -17,7 +17,6 @@ BOOL WINAPI on_exit_callback(DWORD reason) {
         FileSystem::save(accs_fname, User::get_all_accs());
         FileSystem::save(books_fname, Book::get_all_books());
         system("cls");
-
         return true;
     }
 }
@@ -37,11 +36,12 @@ int main() {
     Book::load_books(books_fname);
     User::load_accounts(accs_fname);
 
-    const auto USER = authorize();
-    Console::setTitle(window_title + " | " + USER.get_login());
+    User::current_global_user = authorize();
+    auto&& user = *User::current_global_user.get();
+    Console::setTitle(window_title + " | " + user.get_login());
     SetConsoleCtrlHandler(on_exit_callback, true);  // only after successful login/reg
 
-    const std::unique_ptr<ILibrary> LIBRARY = [is_admin = USER.is_admin()] {
+    const std::unique_ptr<ILibrary> LIBRARY = [is_admin = user.is_admin()] {
         return is_admin ? std::make_unique<Library_as_admin>()
                         : std::make_unique<Library_as_user>();
     }();
@@ -49,10 +49,9 @@ int main() {
     const std::vector<std::string> MENU_ITEMS = LIBRARY->get_menu();
     static const uint16_t MIN_IDX = 0, MAX_IDX = MENU_ITEMS.size() - 1;
     auto&& MENU_CHOICE_CLAMP = std::bind(std::clamp<uint16_t>, std::placeholders::_1, MIN_IDX, MAX_IDX);
-
     do {
         Console_wrapper::draw_frame();
-        Console_wrapper::write_vec(MENU_ITEMS);
+        Console_wrapper::vec_print(MENU_ITEMS);
         const auto choice = MENU_CHOICE_CLAMP(Console_wrapper::get_input<uint16_t>() - 1);
         Console_wrapper::clear_border();  // clear screen b4 doin smth
         LIBRARY->do_at(choice);

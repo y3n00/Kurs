@@ -4,6 +4,7 @@
 #include <string>
 #include <utility>
 
+#include "Book.hpp"
 #include "Console.hpp"
 #include "Console_wrapper.hpp"
 #include "Fsystem.hpp"
@@ -26,9 +27,10 @@ enum User_role : uint16_t {
 class User {
    private:
     static inline size_t next_user_id = 1;
-    static inline nlohmann::json all_accs;
+    static inline nlohmann::json all_accs{};
 
    public:
+    static inline std::unique_ptr<User> current_global_user;
     static void load_accounts(std::string_view filename) {
         FileSystem::load(filename, all_accs);
         if (!all_accs.empty()) {
@@ -38,18 +40,13 @@ class User {
         }
     }
     [[nodiscard]] static const auto& get_all_accs() { return all_accs; }
+    [[nodiscard]] static auto& get_current_user() { return current_global_user; }
+    static void erase(std::string_view user_login) { all_accs.erase(user_login); }
 
    private:
     User_role user_role{};
     size_t user_id{next_user_id++}, user_encrypted_passw{};
     std::string user_login{};
-
-    inline void to_global_json() const {
-        auto& j = all_accs[user_login];
-        j["Role"] = user_role;
-        j["Password"] = user_encrypted_passw;
-        j["ID"] = user_id;
-    }
 
    public:
     User(std::string_view login, const nlohmann::json& acc_data)
@@ -57,14 +54,14 @@ class User {
           user_id{acc_data.at("ID").get<size_t>()},
           user_encrypted_passw{acc_data.at("Password").get<size_t>()},
           user_login{login} {
-        to_global_json();
+        update_data();
     }
 
     User(std::string_view login, std::string_view passw, User_role ROLE)
         : user_role{ROLE},
           user_encrypted_passw{encrypt_str(passw, login.length())},
           user_login{login} {
-        to_global_json();
+        update_data();
     }
 
     User(User&& other_user) noexcept
@@ -100,11 +97,39 @@ class User {
             std::format("Логин: {}", user_login),
             std::format("Хеш пароля: {}", user_encrypted_passw),
             std::format("Статус: {}", (user_role == User_role::admin ? "админ" : "пользователь")),
+            std::format("Взято книг: {}", all_accs[user_login]["Taken books"].size()),
         };
     }
 
-    inline void update_data() const {
-        to_global_json();
+    void update_data() const {
+        auto& j = all_accs[user_login];
+        j["Role"] = user_role;
+        j["Password"] = user_encrypted_passw;
+        j["ID"] = user_id;
+    }
+
+    void take_book(Book& book) {
+        book.set_last_reader(get_reader_ID());
+        book.change_status();
+        all_accs[user_login]["Taken books"] += book.get_title();
+    }
+
+    void return_book(Book& book) {
+        book.change_status();
+        const auto& title = book.get_title();
+        auto&& taken_books = all_accs[user_login]["Taken books"];
+        for (auto it = taken_books.begin(); it != taken_books.end(); ++it) {
+            if (it->get<std::string>() == title) {
+                taken_books.erase(it);
+                break;
+            }
+        }
+    }
+
+    auto get_book_list() const {
+        return all_accs[user_login]["Taken books"] |
+               std::views::transform([](auto&& js_obj) { return js_obj.get<std::string>(); }) |
+               std::ranges::to<std::vector<std::string>>();
     }
 };
 
@@ -132,7 +157,7 @@ namespace {
     }
 }
 
-[[nodiscard]] static User registration() {
+[[nodiscard]] static std::unique_ptr<User> registration() {
     std::println(HEADER_FMT, " Регистрация ", Console::getSizeByChars().width);  // Header
 
     int16_t role_buf;
@@ -160,10 +185,10 @@ namespace {
     (std::cin >> role_buf).get();
 
     const User_role ROLE = role_buf - 1 ? User_role::user : User_role::admin;
-    return User(login_buf, PASSW_BUF, ROLE);
+    return std::make_unique<User>(login_buf, PASSW_BUF, ROLE);
 }
 
-[[nodiscard]] static User login() {
+[[nodiscard]] static std::unique_ptr<User> login() {
     std::println(HEADER_FMT, " Логин ", Console::getSizeByChars().width);  // Header
 
     std::string login_buf;
@@ -185,11 +210,11 @@ namespace {
         return login();
     }
 
-    return User(login_buf, USER_DATA);
+    return std::make_unique<User>(login_buf, USER_DATA);
 }
 }  // namespace
 
-[[nodiscard]] User authorize() {
+[[nodiscard]] std::unique_ptr<User> authorize() {
     if (User::get_all_accs().empty())
         return registration();
 
