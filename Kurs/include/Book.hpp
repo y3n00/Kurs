@@ -27,15 +27,15 @@ class Book {
     std::string author_name{}, book_title{}, book_publisher{};
 
    public:
-    Book(std::string_view title, const nlohmann::json& book_data)
-        : author_name{book_data.at("Author").get<std::string>()},
-          book_title{title},
-          book_pages{book_data.at("Pages").get<uint16_t>()},
-          book_id{book_data.at("ID").get<size_t>()},
-          last_reader{book_data.at("Last reader").get<size_t>()},
-          book_publisher{book_data.at("Publisher").get<std::string>()},
-          book_year{book_data.at("Year").get<uint16_t>()},
-          in_library{book_data.at("In library").get<bool>()} {
+    Book(std::string_view title)
+        : book_title{title} {
+        const auto& CURRENT_BOOK_DATA = all_books.at(book_title);
+        CURRENT_BOOK_DATA["Pages"].get_to(book_pages);
+        CURRENT_BOOK_DATA["ID"].get_to(book_id);
+        CURRENT_BOOK_DATA["Last reader"].get_to(last_reader);
+        CURRENT_BOOK_DATA["Publisher"].get_to(book_publisher);
+        CURRENT_BOOK_DATA["Year"].get_to(book_year);
+        CURRENT_BOOK_DATA["In library"].get_to(in_library);
         update_data();
     }
 
@@ -66,7 +66,7 @@ class Book {
     [[nodiscard]] auto get_id() const { return book_id; }
 
     [[nodiscard]] auto is_in_library() const { return in_library; }
-    void change_status() { in_library = !in_library; }
+    void toggle_status() { in_library = !in_library; }
 
     [[nodiscard]] auto get_year() const { return book_year; }
     void set_year(uint16_t new_value) { book_year = new_value; }
@@ -75,7 +75,7 @@ class Book {
     void set_pages(uint16_t new_value) { book_pages = new_value; }
 
     [[nodiscard]] auto get_last_reader() const { return last_reader; }
-    void set_last_reader(uint16_t new_value) { last_reader = new_value; }
+    void set_last_reader(size_t new_value) { last_reader = new_value; }
 
     [[nodiscard]] auto get_author() const { return author_name; }
     void set_author(std::string_view new_value) { author_name = new_value; }

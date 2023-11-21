@@ -27,33 +27,32 @@ int main() {
     SetConsoleOutputCP(65001);  //
 
     const std::string window_title = "Library App";  // titlebar buffer
-    Console::setFont(18, L"Cascadia Mono");          // font setup
+    Console::setFont(24, L"IBM Plex Mono Light");    // font setup
     Console::configure(window_title, {800, 600});    // setup console
-    Console_wrapper::set_frame_border('|', '-');
+    Logger::new_line_enabled = false;
 
     //////////////////////////////////////////////////////////////////////////////
 
     Book::load_books(books_fname);
     User::load_accounts(accs_fname);
 
-    User::current_global_user = authorize();
-    auto&& user = *User::current_global_user.get();
-    Console::setTitle(window_title + " | " + user.get_login());
-    SetConsoleCtrlHandler(on_exit_callback, true);  // only after successful login/reg
+    const std::unique_ptr<User>& USER = authorize();
+    Console::setTitle(window_title + " | " + USER->get_login());
+    SetConsoleCtrlHandler(on_exit_callback, true);  // save data only after successful login/reg
 
-    const std::unique_ptr<ILibrary> LIBRARY = [is_admin = user.is_admin()] {
-        return is_admin ? std::make_unique<Library_as_admin>()
-                        : std::make_unique<Library_as_user>();
-    }();
+    const std::unique_ptr<ILibrary> LIBRARY = USER->is_admin() ? std::make_unique<Admin_lib>()
+                                                               : std::make_unique<User_lib>();
 
     const std::vector<std::string> MENU_ITEMS = LIBRARY->get_menu();
-    static const uint16_t MIN_IDX = 0, MAX_IDX = MENU_ITEMS.size() - 1;
-    auto&& MENU_CHOICE_CLAMP = std::bind(std::clamp<uint16_t>, std::placeholders::_1, MIN_IDX, MAX_IDX);
+    const int16_t MIN_IDX = 0, MAX_IDX = LIBRARY->get_menu_size() - 1;
+    auto&& menu_choice_clamp = std::bind(std::clamp<int16_t>, std::placeholders::_1, MIN_IDX, MAX_IDX);
     do {
         Console_wrapper::draw_frame();
-        Console_wrapper::vec_print(MENU_ITEMS);
-        const auto choice = MENU_CHOICE_CLAMP(Console_wrapper::get_input<uint16_t>() - 1);
-        Console_wrapper::clear_border();  // clear screen b4 doin smth
-        LIBRARY->do_at(choice);
+        Console_wrapper::vec_write(MENU_ITEMS);
+        const int16_t CHOICE = Console_wrapper::get_input<int16_t>();
+        Console_wrapper::clear_border();
+        LIBRARY->do_at(menu_choice_clamp(CHOICE - 1));
+        Console_wrapper::new_line();
+        Logger::Warning("Нажмите любую клавишу чтобы продолжить");
     } while (_getch() != Keys::ESCAPE);
 }
