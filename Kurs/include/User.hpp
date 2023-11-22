@@ -118,25 +118,28 @@ class User {
     }
 
     void return_book(Book& book) {
-        book.toggle_status();
         const std::string TITLE = book.get_title();
         nlohmann::json& taken_books = all_accs[user_login]["Taken books"];
         for (auto&& it = taken_books.begin(); it != taken_books.end(); ++it) {
             if (it->get<std::string>() == TITLE) {
                 taken_books.erase(it);
+                book.toggle_status();
                 break;
             }
         }
     }
 
-    auto get_taken_books() const {
-        return all_accs[user_login]["Taken books"] |
+    [[nodiscard]] std::vector<std::string> get_taken_books() const {
+        const nlohmann::json& TAKEN_BOOKS = all_accs[user_login]["Taken books"];
+        if (TAKEN_BOOKS.is_null())
+            return {};
+        return TAKEN_BOOKS |
                std::views::transform([](auto&& js_obj) { return js_obj.get<std::string>(); }) |
                std::ranges::to<std::vector<std::string>>();
     }
 };
 
-namespace AUTHORIZATION_FROMS {
+namespace AUTHORIZATION_FORMS {
     [[nodiscard]] std::unique_ptr<User>& login_form() {
         Console_wrapper::draw_frame(" Логин ");
         const nlohmann::json& ALL_ACCS = User::get_all_accs();
@@ -192,7 +195,7 @@ namespace AUTHORIZATION_FROMS {
         User::current_global_user = std::make_unique<User>(LOGIN_BUF, PASSW_BUF, ROLE);
         return User::get_current_user();
     }
-}  // namespace AUTHORIZATION_FROMS
+}  // namespace AUTHORIZATION_FORMS
 
 [[nodiscard]] auto& authorize() {
     auto&& force_reg = []() -> bool {
@@ -204,5 +207,5 @@ namespace AUTHORIZATION_FROMS {
         Console_wrapper::writeln("2) Нет");
         return Console_wrapper::get_input<int>() == 1;
     };
-    return force_reg() ? AUTHORIZATION_FROMS::registration_form() : AUTHORIZATION_FROMS::login_form();
+    return force_reg() ? AUTHORIZATION_FORMS::registration_form() : AUTHORIZATION_FORMS::login_form();
 }

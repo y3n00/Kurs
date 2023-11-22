@@ -183,7 +183,8 @@ class Console_wrapper {
         return buf;
     }
 
-    [[nodiscard]] static std::string vec_selection(const std::vector<std::string>& DATA, bool enumerate = true) {
+    template <typename Ret_Type>
+    [[nodiscard]] static Ret_Type vec_selection(const std::vector<std::string>& DATA, bool enumerate = true) {
         if (DATA.empty()) {
             Logger::Error("Вектор пуст!");
             return {};
@@ -250,7 +251,10 @@ class Console_wrapper {
                 write(std::format("{} страница из {}", current_page + 1, N_PAGES));
             } while (pressed_key = _getch());
         }
-        return DATA[return_value];
+        if constexpr (std::is_integral_v<Ret_Type>)
+            return return_value;
+        else if constexpr (std::is_same_v<Ret_Type, std::string>)
+            return DATA[return_value];
     }
 
     static inline void clear_border() {

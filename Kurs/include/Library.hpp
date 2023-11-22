@@ -18,9 +18,9 @@ struct FUNCTION {
 namespace USER_Functions {
     void view_all_books() {
         const nlohmann::json& ALL_BOOKS = Book::get_all_books();
-        const std::vector<std::string>& BOOKS = ALL_BOOKS.items() |
-                                                std::views::transform([](auto&& js_item) { return js_item.key(); }) |
-                                                std::ranges::to<std::vector<std::string>>();
+        const std::vector<std::string> BOOKS = ALL_BOOKS.items() |
+                                               std::views::transform([](auto&& js_item) { return js_item.key(); }) |
+                                               std::ranges::to<std::vector<std::string>>();
         Console_wrapper::vec_write(BOOKS, true);
     }
 
@@ -30,13 +30,13 @@ namespace USER_Functions {
             Logger::Error("К сожалению список книг пока пуст!");
             return;
         }
-        const std::vector<std::string>& BOOKS = ALL_BOOKS.items() |
-                                                std::views::filter([](auto&& js_item) {
-                                                    return js_item.value().at("In library").get<bool>();
-                                                }) |
-                                                std::views::transform([](auto&& js_item) { return js_item.key(); }) |
-                                                std::ranges::to<std::vector<std::string>>();
-        Book book(Console_wrapper::vec_selection(BOOKS, false));
+        const std::vector<std::string> BOOKS = ALL_BOOKS.items() |
+                                               std::views::filter([](auto&& js_item) {
+                                                   return js_item.value().at("In library").get<bool>();
+                                               }) |
+                                               std::views::transform([](auto&& js_item) { return js_item.key(); }) |
+                                               std::ranges::to<std::vector<std::string>>();
+        Book book(Console_wrapper::vec_selection<std::string>(BOOKS, false));
         User::get_current_user()->take_book(book);
         book.update_data();
         Logger::Succsess("Книга взята!");
@@ -49,10 +49,13 @@ namespace USER_Functions {
             return;
         }
         User& user = *User::get_current_user();
-        Book book(Console_wrapper::vec_selection(user.get_taken_books()));
-        user.return_book(book);
-        book.update_data();
-        Logger::Succsess("Книга возвращена!");
+        const std::string TITLE = Console_wrapper::vec_selection<std::string>(user.get_taken_books());
+        if (!TITLE.empty()) {
+            Book book(TITLE);
+            user.return_book(book);
+            book.update_data();
+            Logger::Succsess("Книга возвращена!");
+        }
     }
 
     void search_book() {
@@ -84,7 +87,7 @@ namespace ADMIN_Functions {
         const std::vector<std::string> LOGINS = ALL_ACCS.items() |
                                                 std::views::transform([](auto&& js_item) { return js_item.key(); }) |
                                                 std::ranges::to<std::vector<std::string>>();
-        const User USER(Console_wrapper::vec_selection(LOGINS));
+        const User USER(Console_wrapper::vec_selection<std::string>(LOGINS));
         Console_wrapper::clear_border();
         Console_wrapper::writeln(std::format("Выбранный пользователь: {}", USER.get_login()));
         Console_wrapper::vec_write(USER.get_data(), false);
@@ -99,7 +102,7 @@ namespace ADMIN_Functions {
         const std::vector<std::string> LOGINS = ALL_ACCS.items() |
                                                 std::views::transform([](auto&& js_item) { return js_item.key(); }) |
                                                 std::ranges::to<std::vector<std::string>>();
-        User user(Console_wrapper::vec_selection(LOGINS));
+        User user(Console_wrapper::vec_selection<std::string>(LOGINS));
 
         Console_wrapper::clear_border();
         Console_wrapper::writeln(std::format("Выбранный пользователь: {}", user.get_login()));
@@ -136,7 +139,25 @@ namespace ADMIN_Functions {
         const std::vector<std::string> LOGINS = ALL_ACCS.items() |
                                                 std::views::transform([](auto&& js_item) { return js_item.key(); }) |
                                                 std::ranges::to<std::vector<std::string>>();
-        User::erase(Console_wrapper::vec_selection(LOGINS));
+        User::erase(Console_wrapper::vec_selection<std::string>(LOGINS));
+    }
+
+    void remove_file() {
+        std::vector<std::string> files;
+        for (auto&& f : std::filesystem::directory_iterator(std::filesystem::current_path())) {
+            if (const auto& f_path = f.path(); f_path.extension() == ".json")
+                files.emplace_back(f_path.filename().string());
+        }
+        Console_wrapper::writeln("Выберите файл");
+        const std::string TO_REMOVE = Console_wrapper::vec_selection<std::string>(files);
+        Console_wrapper::writeln(std::format("Вы уверены, что хотите удалить {}?", TO_REMOVE));
+        Console_wrapper::writeln("1) Да");
+        Console_wrapper::writeln("2) Нет");
+        if (Console_wrapper::get_input<uint16_t>() == 1) {
+            std::filesystem::remove(TO_REMOVE);
+            Logger::Succsess("Файл удален!");
+        } else
+            Logger::Warning("Действие было отменено");
     }
 }  // namespace ADMIN_Functions
 
@@ -154,7 +175,7 @@ class User_lib : public virtual ILibrary {
         {"поиск книги", USER_Functions::search_book},
         {"взять книгу", USER_Functions::take_book},
         {"вернуть книгу", USER_Functions::return_book},
-        {"сортировка", [] { Console_wrapper::writeln("user #3"); }},
+        {"!сортировка", [] { Console_wrapper::writeln("user #5"); }},
     };
 
    public:
@@ -177,9 +198,11 @@ class Admin_lib : virtual public ILibrary, public User_lib {
    protected:
     static inline const std::vector<FUNCTION> admin_funcs{
         {"просмотреть все учетные записи", ADMIN_Functions::print_all_users},
-        {"добавить учетную запись", [] { Console_wrapper::writeln("admin #2"); }},
+        {"!добавить книгу", [] { Console_wrapper::writeln("admin #2"); }},
+        {"!добавить учетную запись", [] { Console_wrapper::writeln("admin #3"); }},
         {"отредактировать учетную запись", ADMIN_Functions::edit_user},
         {"удалить учетную запись", ADMIN_Functions::delete_user_entry},
+        {"удалить файл", ADMIN_Functions::remove_file},
     };
 
    public:
@@ -193,11 +216,11 @@ class Admin_lib : virtual public ILibrary, public User_lib {
     }
 
     constexpr inline void do_at(uint16_t idx) const override {
-        const auto user_menu_size = User_lib::get_menu_size();
-        if (idx < user_menu_size)
+        const size_t USER_MENU_SIZE = User_lib::get_menu_size();
+        if (idx < USER_MENU_SIZE)
             User_lib::do_at(idx);
         else
-            admin_funcs.at(idx - user_menu_size).invoke();
+            admin_funcs.at(idx - USER_MENU_SIZE).invoke();
     }
 
     [[nodiscard]] constexpr inline size_t get_menu_size() const override {
@@ -207,7 +230,6 @@ class Admin_lib : virtual public ILibrary, public User_lib {
 /* ADMIN!
 1. Управление учетными записями пользователей:
 - добавить учетную запись;
-- удалить учетную запись.
 2. *Работа с файлом данных:
 - создать файл;
 - открыть файл;

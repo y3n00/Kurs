@@ -30,6 +30,7 @@ class Book {
     Book(std::string_view title)
         : book_title{title} {
         const auto& CURRENT_BOOK_DATA = all_books.at(book_title);
+        CURRENT_BOOK_DATA["Author"].get_to(author_name);
         CURRENT_BOOK_DATA["Pages"].get_to(book_pages);
         CURRENT_BOOK_DATA["ID"].get_to(book_id);
         CURRENT_BOOK_DATA["Last reader"].get_to(last_reader);
