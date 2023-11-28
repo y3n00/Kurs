@@ -40,6 +40,11 @@ class User {
     [[nodiscard]] static const auto& get_all_accs() { return all_accs; }
     [[nodiscard]] static auto& get_current_user() { return current_global_user; }
     static void erase(std::string_view user_login) { all_accs.erase(user_login); }
+    [[nodiscard]] static std::vector<User> get_all_users() {
+        return all_accs.items() |
+               std::views::transform([](auto&& json_item) { return User(json_item.key()); }) |
+               std::ranges::to<std::vector<User>>();
+    }
 
    private:
     User_role user_role{};
@@ -131,7 +136,7 @@ class User {
 
     [[nodiscard]] std::vector<std::string> get_taken_books() const {
         const nlohmann::json& TAKEN_BOOKS = all_accs[user_login]["Taken books"];
-        if (TAKEN_BOOKS.is_null())
+        if (TAKEN_BOOKS.empty() || TAKEN_BOOKS.is_null())
             return {};
         return TAKEN_BOOKS |
                std::views::transform([](auto&& js_obj) { return js_obj.get<std::string>(); }) |
@@ -197,7 +202,7 @@ namespace AUTHORIZATION_FORMS {
     }
 }  // namespace AUTHORIZATION_FORMS
 
-[[nodiscard]] auto& authorize() {
+[[nodiscard]] std::unique_ptr<User>& authorize() {
     auto&& force_reg = []() -> bool {
         if (User::get_all_accs().empty())
             return true;
@@ -205,7 +210,7 @@ namespace AUTHORIZATION_FORMS {
         Console_wrapper::writeln("Cоздать новый аккаунт?");
         Console_wrapper::writeln("1) Да");
         Console_wrapper::writeln("2) Нет");
-        return Console_wrapper::get_input<int>() == 1;
+        return Console_wrapper::get_input<int16_t>() == 1;
     };
     return force_reg() ? AUTHORIZATION_FORMS::registration_form() : AUTHORIZATION_FORMS::login_form();
 }

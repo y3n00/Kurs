@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <format>
 #include <ranges>
 #include <sstream>
@@ -16,26 +17,43 @@ struct FUNCTION {
 };
 
 namespace USER_Functions {
-    void view_all_books() {
-        const nlohmann::json& ALL_BOOKS = Book::get_all_books();
-        const std::vector<std::string> BOOKS = ALL_BOOKS.items() |
-                                               std::views::transform([](auto&& js_item) { return js_item.key(); }) |
-                                               std::ranges::to<std::vector<std::string>>();
-        Console_wrapper::vec_write(BOOKS, true);
-    }
-
-    void take_book() {
-        const nlohmann::json& ALL_BOOKS = Book::get_all_books();
+    void my_task() {
+        std::vector ALL_BOOKS = Book::get_all_books();
         if (ALL_BOOKS.empty()) {
             Logger::Error("К сожалению список книг пока пуст!");
             return;
         }
-        const std::vector<std::string> BOOKS = ALL_BOOKS.items() |
-                                               std::views::filter([](auto&& js_item) {
-                                                   return js_item.value().at("In library").get<bool>();
-                                               }) |
-                                               std::views::transform([](auto&& js_item) { return js_item.key(); }) |
-                                               std::ranges::to<std::vector<std::string>>();
+        Console_wrapper::write("Введите год: ");
+        const uint16_t YEAR = Console_wrapper::get_inline_input<uint16_t>();
+        auto&& BOOKS_BY_PARAM = ALL_BOOKS |
+                                std::views::filter([YEAR](auto&& book) { return book.is_in_library() && book.get_year() >= YEAR; }) |
+                                std::views::transform([](auto&& book) { return std::move(book); }) |
+                                std::ranges::to<std::vector<Book>>();
+
+        // std::sort(BOOKS_BY_PARAM.begin(), BOOKS_BY_PARAM.end(),
+        //           [](auto&& b1, auto&& b2) -> bool {
+        //               return b1.get_author() < b2.get_author();
+        //           });
+        //Console_wrapper::book_table(BOOKS_BY_PARAM);
+    }
+
+    void view_all_books() {
+        const std::vector BOOKS = Book::get_all_books() |
+                                  std::views::transform([](auto&& book) { return book.get_title(); }) |
+                                  std::ranges::to<std::vector<std::string>>();
+        Console_wrapper::vec_write(BOOKS, true);
+    }
+
+    void take_book() {
+        const std::vector ALL_BOOKS = Book::get_all_books();
+        if (ALL_BOOKS.empty()) {
+            Logger::Error("К сожалению список книг пока пуст!");
+            return;
+        }
+        const std::vector BOOKS = ALL_BOOKS |
+                                  std::views::filter([](auto&& book) { return book.is_in_library(); }) |
+                                  std::views::transform([](auto&& book) { return book.get_title(); }) |
+                                  std::ranges::to<std::vector<std::string>>();
         Book book(Console_wrapper::vec_selection<std::string>(BOOKS, false));
         User::get_current_user()->take_book(book);
         book.update_data();
@@ -43,33 +61,35 @@ namespace USER_Functions {
     }
 
     void return_book() {
-        const nlohmann::json& ALL_BOOKS = Book::get_all_books();
+        const std::vector ALL_BOOKS = Book::get_all_books();
         if (ALL_BOOKS.empty()) {
             Logger::Error("К сожалению список книг пока пуст!");
             return;
         }
         User& user = *User::get_current_user();
-        const std::string TITLE = Console_wrapper::vec_selection<std::string>(user.get_taken_books());
-        if (!TITLE.empty()) {
-            Book book(TITLE);
-            user.return_book(book);
-            book.update_data();
-            Logger::Succsess("Книга возвращена!");
+        const auto taken_books = user.get_taken_books();
+        if (taken_books.empty()) {
+            Logger::Error("Нет взятых книг!");
+            return;
         }
+        Book book(Console_wrapper::vec_selection<std::string>(taken_books));
+        user.return_book(book);
+        book.update_data();
+        Logger::Succsess("Книга возвращена!");
     }
 
     void search_book() {
-        const nlohmann::json& ALL_BOOKS = Book::get_all_books();
+        const std::vector ALL_BOOKS = Book::get_all_books();
         if (ALL_BOOKS.empty()) {
             Logger::Error("К сожалению список книг пока пуст!");
             return;
         }
         Console_wrapper::writeln("Введите название книги которую желаете найти");
         const std::string TO_FIND = Console_wrapper::get_input<std::string>();
-        for (auto&& book : Book::get_all_books().items()) {
-            if (std::string_view key = book.key(); key.contains(TO_FIND)) {
+        for (auto&& book : ALL_BOOKS) {
+            if (std::string title = book.get_title(); title.contains(TO_FIND)) {
                 Console_wrapper::writeln("Книга найдена!");
-                Console_wrapper::vec_write(Book(key).get_data(), false);
+                Console_wrapper::vec_write(Book(title).get_data(), false);
                 return;
             }
         }
@@ -79,14 +99,14 @@ namespace USER_Functions {
 
 namespace ADMIN_Functions {
     void print_all_users() {
-        const nlohmann::json& ALL_ACCS = User::get_all_accs();
-        if (ALL_ACCS.empty()) {
+        const std::vector ALL_USERS = User::get_all_users();
+        if (ALL_USERS.empty()) {
             Logger::Error("Список пользователей пуст!");
             return;
         }
-        const std::vector<std::string> LOGINS = ALL_ACCS.items() |
-                                                std::views::transform([](auto&& js_item) { return js_item.key(); }) |
-                                                std::ranges::to<std::vector<std::string>>();
+        const std::vector LOGINS = ALL_USERS |
+                                   std::views::transform([](auto&& user) { return user.get_login(); }) |
+                                   std::ranges::to<std::vector<std::string>>();
         const User USER(Console_wrapper::vec_selection<std::string>(LOGINS));
         Console_wrapper::clear_border();
         Console_wrapper::writeln(std::format("Выбранный пользователь: {}", USER.get_login()));
@@ -94,14 +114,14 @@ namespace ADMIN_Functions {
     }
 
     void edit_user() {
-        const nlohmann::json& ALL_ACCS = User::get_all_accs();
-        if (ALL_ACCS.empty()) {
+        const std::vector ALL_USERS = User::get_all_users();
+        if (ALL_USERS.empty()) {
             Logger::Error("Список пользователей пуст!");
             return;
         }
-        const std::vector<std::string> LOGINS = ALL_ACCS.items() |
-                                                std::views::transform([](auto&& js_item) { return js_item.key(); }) |
-                                                std::ranges::to<std::vector<std::string>>();
+        const std::vector LOGINS = ALL_USERS |
+                                   std::views::transform([](auto&& user) { return user.get_login(); }) |
+                                   std::ranges::to<std::vector<std::string>>();
         User user(Console_wrapper::vec_selection<std::string>(LOGINS));
 
         Console_wrapper::clear_border();
@@ -131,14 +151,14 @@ namespace ADMIN_Functions {
     }
 
     void delete_user_entry() {
-        const nlohmann::json& ALL_ACCS = User::get_all_accs();
-        if (ALL_ACCS.empty()) {
+        const std::vector ALL_USERS = User::get_all_users();
+        if (ALL_USERS.empty()) {
             Logger::Error("Список пользователей пуст!");
             return;
         }
-        const std::vector<std::string> LOGINS = ALL_ACCS.items() |
-                                                std::views::transform([](auto&& js_item) { return js_item.key(); }) |
-                                                std::ranges::to<std::vector<std::string>>();
+        const std::vector LOGINS = ALL_USERS |
+                                   std::views::transform([](auto&& user) { return user.get_login(); }) |
+                                   std::ranges::to<std::vector<std::string>>();
         User::erase(Console_wrapper::vec_selection<std::string>(LOGINS));
     }
 
@@ -171,6 +191,7 @@ struct ILibrary {
 class User_lib : public virtual ILibrary {
    protected:
     static inline const std::vector<FUNCTION> user_funcs{
+        {"задание по варианту", USER_Functions::my_task},
         {"просмотреть все книги", USER_Functions::view_all_books},
         {"поиск книги", USER_Functions::search_book},
         {"взять книгу", USER_Functions::take_book},
@@ -246,9 +267,9 @@ class Admin_lib : virtual public ILibrary, public User_lib {
 /* USER
 - просмотреть все данные;
 - выполнить задачи, указанную в индивидуальном задании:
-    Вывести  список  книг  с  фамилиями  авторов  в  алфавитном  порядке,  изданных  после
-    заданного  года  (год  вводится  с  клавиатуры).  Вывести  список  книг,  находящихся  в
-    текущий момент у читателей
+        Вывести  список  книг  с  фамилиями  авторов  в  алфавитном  порядке,  изданных  после
+        заданного  года  (год  вводится  с  клавиатуры).  Вывести  список  книг,  находящихся  в
+        текущий момент у читателей
 - выполнить поиск данных;
 - выполнить сортировку по различным полям в алфавитном порядке / в порядке убывания.
 */

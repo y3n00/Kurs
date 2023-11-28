@@ -3,6 +3,7 @@
 #include <conio.h>
 
 #include <algorithm>
+#include <format>
 #include <functional>
 #include <iostream>
 #include <ranges>
@@ -12,6 +13,7 @@
 
 #include "Console.hpp"
 #include "Log.hpp"
+#include "thirdparty/json.hpp"
 
 constexpr inline const char* ENUMED_ELEM_FMT = "{0: >2}) {1}";
 
@@ -45,6 +47,10 @@ enum Keys : int16_t {
     return std::ranges::count_if(str, [](char byte) { return ((byte & 0x80) == 0 || (byte & 0xC0) == 0xC0); });
 }
 
+[[nodiscard]] constexpr inline std::string cut_str(std::string_view str, size_t count) {
+    return std::string{str.substr(0, count - 3)} + "...";
+}
+
 class Console_wrapper {
    private:
     static inline char vert_symb = '|', hor_symb = '-';
@@ -72,7 +78,7 @@ class Console_wrapper {
         const auto [CURSOR_X, CURSOR_Y] = Console::getCursorPosition();
         const int32_t ACTUAL_HEIGHT = CON_HEIGHT - BORDER_PADDING;
 
-        const size_t VERT_SIZE_DIFF = ACTUAL_HEIGHT - DATA.size();
+        const int32_t VERT_SIZE_DIFF = ACTUAL_HEIGHT - DATA.size();
         const bool VEC_IS_BIGGER = VERT_SIZE_DIFF < 0;
         const size_t MAX_IDX = VEC_IS_BIGGER ? ACTUAL_HEIGHT - 1 : DATA.size();
 
@@ -128,13 +134,7 @@ class Console_wrapper {
         const int32_t ACTUAL_WIDTH = CON_WIDTH - BORDER_PADDING;
         const size_t STR_LENGTH = my_strlen(str);
         const ptrdiff_t FITTED_PART = ACTUAL_WIDTH - (CURSOR_X + STR_LENGTH);
-
-        if (FITTED_PART >= 0)  // if line fits horizontaly
-            std::cout << str;
-        else {
-            const size_t FITTED_SIZE = FITTED_PART + STR_LENGTH;   // FITTED_SIZE is negative
-            std::cout << str.substr(0, FITTED_SIZE - 3) << "...";  // -3 for "..."
-        }
+        std::cout << (FITTED_PART >= 0 ? str : cut_str(str, FITTED_PART + STR_LENGTH));
     }
 
     static inline void writeln(std::string_view msg) {
@@ -194,7 +194,7 @@ class Console_wrapper {
         const auto [CURSOR_X, CURSOR_Y] = Console::getCursorPosition();
         const int32_t ACTUAL_HEIGHT = CON_HEIGHT - BORDER_PADDING;
 
-        const size_t VERT_SIZE_DIFF = ACTUAL_HEIGHT - DATA.size();
+        const int32_t VERT_SIZE_DIFF = ACTUAL_HEIGHT - DATA.size();
         const bool VEC_IS_BIGGER = VERT_SIZE_DIFF < 0;
         const size_t MAX_IDX = VEC_IS_BIGGER ? ACTUAL_HEIGHT - 1 : DATA.size();
         const auto& ENUMED = DATA | std::views::enumerate;
@@ -263,5 +263,53 @@ class Console_wrapper {
         for (int16_t i = 1; i <= CON_HEIGHT - BORDER_PADDING; i++)
             Console::putStr(EMPTY_SPACE, {1, i});
         Console::setCursorPos({1, 1});
+    }
+
+    static void book_table(const nlohmann::json& js_obj, bool enumerate = true) {
+        if (js_obj.empty() || js_obj.is_null()) {
+            Logger::Error("Пусто!");
+            return;
+        }
+
+        constexpr auto remove_quotes = [](auto&& str) {
+            return (str.front() == '"' ? str.substr(1, str.length() - 2) : str);
+        };
+        constexpr auto format_str = [](const std::string& str, uint16_t width) {
+            if (width <= str.size()) return str;
+            const auto fmt_str = std::format("{{: ^{}}}", width);
+            return std::vformat(fmt_str, std::make_format_args(str));
+        };
+        const auto [CON_WIDTH, CON_HEIGHT] = Console::getSizeByChars();
+        const auto [CURSOR_X, CURSOR_Y] = Console::getCursorPosition();
+
+        const size_t COL_N = js_obj.front().size() + 1;  // 1 for title of json_obj
+        std::map<std::string, size_t> s_sz{};
+        for (auto&& [key, value] : js_obj.items()) {  // key = title, value = subjson
+            s_sz["Title"] = std::max(s_sz["Title"], remove_quotes(key).length());
+            for (auto&& [key2, value2] : value.items()) {
+                const auto V_AS_STR = remove_quotes(nlohmann::to_string(value2));
+                s_sz[key2] = std::max(s_sz[key2], V_AS_STR.length());
+            }
+        }
+        const auto MAP_VALS = s_sz | std::views::values | std::views::common;
+        const size_t SUM_OF_LEN = std::accumulate(MAP_VALS.begin(), MAP_VALS.end(), 0);
+
+        const int32_t ACTUAL_HEIGHT = CON_HEIGHT - BORDER_PADDING - 1; // 1 for table header
+        const int32_t ACTUAL_WIDTH = CON_WIDTH - BORDER_PADDING;
+
+        const int32_t free_hor_space = ACTUAL_WIDTH - SUM_OF_LEN;
+
+        if (free_hor_space >= 0) {
+            const auto& last_key = s_sz.rbegin()->first;
+            int16_t EACH_FREE_SPACE = free_hor_space / COL_N;
+            int16_t last_free = EACH_FREE_SPACE - 1;
+            
+            for (auto&& [k, v] : s_sz) {
+                std::cout << format_str(k, v + last_free);
+                if (last_free > 0  && last_key != k)
+                    std::cout << '|';
+            }
+            std::cout << '\n';
+        }
     }
 };

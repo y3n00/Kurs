@@ -18,7 +18,13 @@ class Book {
             global_book_id += 1;
         }
     }
-    [[nodiscard]] static const auto& get_all_books() { return all_books; }
+    [[nodiscard]] static const auto& get_books_json() { return all_books; }
+
+    [[nodiscard]] static std::vector<Book> get_all_books() {
+        return all_books.items() |
+               std::views::transform([](auto&& json_item) { return Book(json_item.key()); }) |
+               std::ranges::to<std::vector<Book>>();
+    }
 
    private:
     bool in_library{};
