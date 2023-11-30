@@ -16,7 +16,7 @@ enum User_role : uint16_t {
     user
 };
 
-[[nodiscard]] size_t encrypt_str(std::string_view arg, size_t key) {  // caesar + hash
+[[nodiscard]] size_t encrypt_str(std::string_view arg, size_t key) {  // Caesar + hash
     return std::hash<std::string>{}(arg |
                                     std::views::transform([key](char ch) { return ch + key; }) |
                                     std::ranges::to<std::string>());

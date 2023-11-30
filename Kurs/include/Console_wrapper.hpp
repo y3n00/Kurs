@@ -6,13 +6,14 @@
 #include <format>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <ranges>
-#include <sstream>
 #include <string>
 #include <vector>
 
 #include "Console.hpp"
 #include "Log.hpp"
+#include "Utils.hpp"
 #include "thirdparty/json.hpp"
 
 constexpr inline const char* ENUMED_ELEM_FMT = "{0: >2}) {1}";
@@ -38,18 +39,10 @@ enum Keys : int16_t {
     DOWN_ARR = 80,
 };
 
-[[nodiscard]] inline std::vector<std::string> split_lines(std::string_view str) {
-    return str | std::views::split('\n') | std::ranges::to<std::vector<std::string>>();
-}
-
-// for same size in different languages
-[[nodiscard]] constexpr inline size_t my_strlen(std::string_view str) {
-    return std::ranges::count_if(str, [](char byte) { return ((byte & 0x80) == 0 || (byte & 0xC0) == 0xC0); });
-}
-
-[[nodiscard]] constexpr inline std::string cut_str(std::string_view str, size_t count) {
-    return std::string{str.substr(0, count - 3)} + "...";
-}
+enum Sort_Method {
+    less,
+    greater
+};
 
 class Console_wrapper {
    private:
@@ -265,51 +258,56 @@ class Console_wrapper {
         Console::setCursorPos({1, 1});
     }
 
-    static void book_table(const nlohmann::json& js_obj, bool enumerate = true) {
+    template <Sort_Method sm = less>
+    [[nodiscard]] static std::vector<std::string> generate_table(const nlohmann::json& js_obj,
+                                                                 std::string_view sort_key = "Title") {
+        static constexpr int16_t EACH_PADDING = 1, MAX_STRLEN = 25;
+        auto&& restrict_len = std::bind(std::clamp<size_t>, std::placeholders::_1, 0, MAX_STRLEN);
+
         if (js_obj.empty() || js_obj.is_null()) {
             Logger::Error("Пусто!");
-            return;
+            return {};
+        }
+        auto&& represented = represent_json(js_obj);
+        std::vector<std::string> table_rows;  // size() returns N elements -> N is number of rows
+        table_rows.reserve(represented.size());
+
+        if (sort_key != "Title") {
+            std::ranges::sort(represented, [sort_key](auto&& l, auto&& r) -> bool {
+                if constexpr (sm == less)
+                    return l[sort_key] < r[sort_key];
+                else
+                    return l[sort_key] > r[sort_key];
+            });
         }
 
-        constexpr auto remove_quotes = [](auto&& str) {
-            return (str.front() == '"' ? str.substr(1, str.length() - 2) : str);
-        };
-        constexpr auto format_str = [](const std::string& str, uint16_t width) {
-            if (width <= str.size()) return str;
-            const auto fmt_str = std::format("{{: ^{}}}", width);
-            return std::vformat(fmt_str, std::make_format_args(str));
-        };
-        const auto [CON_WIDTH, CON_HEIGHT] = Console::getSizeByChars();
-        const auto [CURSOR_X, CURSOR_Y] = Console::getCursorPosition();
-
-        const size_t COL_N = js_obj.front().size() + 1;  // 1 for title of json_obj
-        std::map<std::string, size_t> s_sz{};
-        for (auto&& [key, value] : js_obj.items()) {  // key = title, value = subjson
-            s_sz["Title"] = std::max(s_sz["Title"], remove_quotes(key).length());
-            for (auto&& [key2, value2] : value.items()) {
-                const auto V_AS_STR = remove_quotes(nlohmann::to_string(value2));
-                s_sz[key2] = std::max(s_sz[key2], V_AS_STR.length());
+        std::map<std::string, size_t> key_colwidth;
+        for (auto&& j : represented) {
+            for (auto&& [key, value] : j.items()) {
+                auto& current = key_colwidth[key];
+                current = restrict_len(std::max({current, value_view(value).length(), key.length()}));
             }
         }
-        const auto MAP_VALS = s_sz | std::views::values | std::views::common;
-        const size_t SUM_OF_LEN = std::accumulate(MAP_VALS.begin(), MAP_VALS.end(), 0);
+        const std::string& LAST_KEY = key_colwidth.rbegin()->first;
 
-        const int32_t ACTUAL_HEIGHT = CON_HEIGHT - BORDER_PADDING - 1; // 1 for table header
-        const int32_t ACTUAL_WIDTH = CON_WIDTH - BORDER_PADDING;
-
-        const int32_t free_hor_space = ACTUAL_WIDTH - SUM_OF_LEN;
-
-        if (free_hor_space >= 0) {
-            const auto& last_key = s_sz.rbegin()->first;
-            int16_t EACH_FREE_SPACE = free_hor_space / COL_N;
-            int16_t last_free = EACH_FREE_SPACE - 1;
-            
-            for (auto&& [k, v] : s_sz) {
-                std::cout << format_str(k, v + last_free);
-                if (last_free > 0  && last_key != k)
-                    std::cout << '|';
-            }
-            std::cout << '\n';
+        std::string header_buf;
+        for (auto&& [key, col_width] : key_colwidth) {
+            header_buf += place_by_width(key, col_width + EACH_PADDING);
+            if (key != LAST_KEY)
+                header_buf += '|';
         }
+        table_rows.emplace_back(std::move(std::format("\033[4m{}\033[0m", header_buf)));  // underlined
+
+        for (auto&& j : represented) {
+            std::string row_buf;
+            for (auto&& [key, col_width] : key_colwidth) {
+                const auto prepared = cut_str(value_view(j[key]), MAX_STRLEN);
+                row_buf += place_by_width(prepared, col_width + EACH_PADDING);
+                if (key != LAST_KEY)
+                    row_buf += '|';
+            }
+            table_rows.emplace_back(std::move(row_buf));
+        }
+        return table_rows;
     }
 };
