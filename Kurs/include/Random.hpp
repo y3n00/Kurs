@@ -1,8 +1,7 @@
 #pragma once
-
 #include <random>
-#include <string_view>
-#include <type_traits>
+#include <string>
+
 template <typename T = uint32_t>
 class Random {
    private:
