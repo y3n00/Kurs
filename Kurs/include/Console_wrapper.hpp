@@ -142,14 +142,14 @@ struct Console_wrapper {
 
     template <typename T>
     [[nodiscard]] constexpr static T get_inline_input(bool password = false, char symb = '*') {
+        update();
         T buf{};
         if constexpr (std::is_same_v<T, std::string>) {
             do {
                 const char KEY = _getch();
                 if (KEY == Keys::ENTER) {
                     if (buf.empty())
-                        continue;
-                    new_line();
+                        continue;                    
                     break;
                 }
                 if (KEY == Keys::BACKSPACE) {
@@ -164,6 +164,7 @@ struct Console_wrapper {
             } while (true);
         } else
             (std::cin >> buf).get();
+        new_line();
         return buf;
     }
 
@@ -173,7 +174,6 @@ struct Console_wrapper {
         Console::putStr(std::string(CON_WIDTH - BORDER_PADDING, ' '), {1, int16_t(CON_HEIGHT - BORDER_PADDING)});
         Console::putStr("Ввод: ", {1, int16_t(CON_HEIGHT - BORDER_PADDING)});
         auto&& buf = get_inline_input<T>(password, symb);
-        std::cin.clear();
         new_cursor_pos({CURSOR_X, CURSOR_Y});
         return buf;
     }
@@ -316,7 +316,8 @@ struct Console_wrapper {
         void view() {
             generate_header()->generate_rows();
             const int16_t MAX_W = my_strlen(table_header) + BORDER_PADDING + 1;
-            Console::setSizeByChars({MAX_W, CON_HEIGHT});
+            if(MAX_W > 50)
+                Console::setSizeByChars({MAX_W, CON_HEIGHT});
             vec_write(table_rows, false, table_header);
         }
 

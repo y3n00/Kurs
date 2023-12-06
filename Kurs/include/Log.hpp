@@ -38,26 +38,3 @@ namespace Logger {
             std::cout << '\n';
     }
 }  // namespace Logger
-
-#ifdef _DEBUG
-#define D_PRINT(...) \
-    Logger::Print(__VA_ARGS__)
-
-#define D_WARN(...) \
-    Logger::Warning(__VA_ARGS__)
-
-#define D_ERR(...) \
-    Logger::Error(__VA_ARGS__)
-
-#define D_SUCCESS(...) \
-    Logger::Succsess(__VA_ARGS__)
-
-#else
-#define D_PRINT(...)
-
-#define D_WARN(...)
-
-#define D_ERR(...)
-
-#define D_SUCCESS(...)
-#endif

@@ -56,7 +56,6 @@ namespace USER_Functions {
             Logger::Error("Список книг пока пуст!");
             return;
         }
-
         auto&& books_table = Console_wrapper::Table::create_table(all_books_json);
         auto&& included = books_table->include_only([](auto&& j) { return j["In library"]; });
         if (!included->get_sz())
@@ -83,7 +82,45 @@ namespace USER_Functions {
     }
 
     void sort_books() {
+        auto&& all_books_json = Book::get_json();
+        if (all_books_json.empty()) {
+            Logger::Error("Список книг пока пуст!");
+            return;
         }
+        auto&& books_table = Console_wrapper::Table::create_table(all_books_json);
+        static const std::vector<std::string> choises = {"Название", "Автор", "Год выпуска", "ID книги",
+                                                         "Издатель", "Количество страниц", "ID последнего читателя"};
+        const auto choice = Console_wrapper::vec_selection<int16_t>(choises, true, "Выберите по чем сортировать:") + 1;
+
+        Console_wrapper::writeln("Выберите способ сортировки:");
+        Console_wrapper::writeln("1) От меньшего к большему");
+        Console_wrapper::writeln("2) От большего к меньшему");
+        const Sort_Method sm = Console_wrapper::get_inline_input<int16_t>() == 1 ? less : greater;
+        switch (choice) {
+            case 1:
+                books_table->sort("Title", sm);
+                break;
+            case 2:
+                books_table->sort("Author", sm);
+                break;
+            case 3:
+                books_table->sort("Year", sm);
+                break;
+            case 4:
+                books_table->sort("ID", sm);
+                break;
+            case 5:
+                books_table->sort("Publisher", sm);
+                break;
+            case 6:
+                books_table->sort("Pages", sm);
+                break;
+            case 7:
+                books_table->sort("Last reader", sm);
+                break;
+        }
+        books_table->view();
+    }
 }  // namespace USER_Functions
 
 namespace ADMIN_Functions {
@@ -99,9 +136,45 @@ namespace ADMIN_Functions {
         Console_wrapper::vec_write(user.get_data(), false);
     }
 
-   void add_book() {}
+    void add_book() {
+        Console_wrapper::draw_frame("Добавление книги");
+        Console_wrapper::write("Введите название: ");
+        auto&& title_buf = Console_wrapper::get_inline_input<std::string>();
+        Console_wrapper::write("Введите автора: ");
+        auto&& author_buf = Console_wrapper::get_inline_input<std::string>();
+        Console_wrapper::write("Введите издателя: ");
+        auto&& pub_buf = Console_wrapper::get_inline_input<std::string>();
+        Console_wrapper::write("Введите количество страниц: ");
+        auto&& pages_buf = Console_wrapper::get_inline_input<uint16_t>();
+        Console_wrapper::write("Введите год выпуска: ");
+        auto&& year_buf = Console_wrapper::get_inline_input<uint16_t>();
+        Console_wrapper::writeln("Выберите статус: ");
+        Console_wrapper::writeln("1) В библиотеке");
+        Console_wrapper::writeln("2) У читателя");
+        auto&& in_lib_buf = Console_wrapper::get_inline_input<uint16_t>() == 1;
+        Book(title_buf, in_lib_buf, year_buf, pages_buf, author_buf, pub_buf);
+        Logger::Succsess("Книга успешно добавлена!");
+    }
 
-    void add_user() {}
+    void add_user() {
+        Console_wrapper::draw_frame("Добавление пользователя");
+        auto&& all_users_json = User::get_json();
+        Console_wrapper::write("Введите логин: ");
+        auto&& login_buf = Console_wrapper::get_inline_input<std::string>();
+        if (all_users_json.contains(login_buf)) {
+            Logger::Error("Аккаунт с таким логином уже существует");
+            std::cin.get();
+            return;
+        }
+        Console_wrapper::write("Задайте пароль: ");
+        auto&& passw_buf = Console_wrapper::get_inline_input<std::string>(true);
+        Console_wrapper::writeln("Выберите роль:");
+        Console_wrapper::writeln("1) Администратор");
+        Console_wrapper::writeln("2) Пользователь");
+        auto&& ur = Console_wrapper::get_inline_input<int16_t>() == 1 ? User_role::admin : User_role::user;
+        User(login_buf, passw_buf, ur);
+        Logger::Succsess("Пользователь успешно добавлен!");
+    }
 
     void edit_user() {
         auto&& all_users_json = User::get_json();
