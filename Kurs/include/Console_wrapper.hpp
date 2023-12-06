@@ -3,19 +3,30 @@
 #include <conio.h>
 
 #include <algorithm>
+#include <format>
 #include <functional>
 #include <iostream>
+#include <map>
+#include <memory>
+#include <numeric>
 #include <ranges>
-#include <sstream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "Console.hpp"
 #include "Log.hpp"
+#include "Utils.hpp"
+#include "thirdparty/json.hpp"
 
-constexpr inline const char* ENUMED_ELEM_FMT = "{0: >2}) {1}";
+constexpr inline const char* enumed_range_ELEM_FMT = "{0: >2}) {1}";
 
-enum Keys : int16_t {
+enum Sort_Method : uint8_t {
+    less,
+    greater
+};
+
+enum Keys : uint16_t {
     BACKSPACE = 8,
     ENTER = 13,
     ESCAPE = 27,
@@ -36,74 +47,69 @@ enum Keys : int16_t {
     DOWN_ARR = 80,
 };
 
-[[nodiscard]] inline std::vector<std::string> split_lines(std::string_view str) {
-    return str | std::views::split('\n') | std::ranges::to<std::vector<std::string>>();
-}
-
-// for same size in different languages
-[[nodiscard]] constexpr inline size_t my_strlen(std::string_view str) {
-    return std::ranges::count_if(str, [](char byte) { return ((byte & 0x80) == 0 || (byte & 0xC0) == 0xC0); });
-}
-
-class Console_wrapper {
-   private:
+struct Console_wrapper {
     static inline char vert_symb = '|', hor_symb = '-';
     static constexpr uint8_t BORDER_PADDING = 2;
+    static inline int16_t CON_WIDTH{}, CON_HEIGHT{}, CURSOR_X{}, CURSOR_Y{};
 
-   public:
-    static inline void new_line() {
-        const int16_t CON_HEIGHT = Console::getSizeByChars().height;
-        const int16_t CURRENT_Y = Console::getCursorPosition().height;
-        const int16_t Y_NEXT = std::clamp<int16_t>(CURRENT_Y + 1, CURRENT_Y, CON_HEIGHT - BORDER_PADDING);
-        Console::setCursorPos({1, Y_NEXT});
+    static inline void update() {
+        auto&& [W, H] = Console::getSizeByChars();
+        auto&& [X, Y] = Console::getCursorPosition();
+        CON_WIDTH = W, CON_HEIGHT = H, CURSOR_X = X, CURSOR_Y = Y;
     }
 
-    static void setup_border(char vert, char hor) {
+    static inline void new_line() {
+        new_cursor_pos({1, std::clamp<int16_t>(CURSOR_Y + 1, CURSOR_Y, CON_HEIGHT - BORDER_PADDING)});
+    }
+
+    static inline void setup_border(char vert, char hor) {
         vert_symb = vert;
         hor_symb = hor;
     }
 
-    static void vec_write(const std::vector<std::string>& DATA, bool enumerate = true) {
+    static inline void new_cursor_pos(const Console::SZ<int16_t>& new_pos) {
+        CURSOR_X = new_pos.width, CURSOR_Y = new_pos.height;
+        Console::setCursorPos(new_pos);
+    }
+
+    static void vec_write(const std::vector<std::string>& DATA, bool enumerate = true, std::string_view header = "") {
         if (DATA.empty()) {
             Logger::Error("Вектор пуст!");
             return;
         }
-        const auto [CON_WIDTH, CON_HEIGHT] = Console::getSizeByChars();
-        const auto [CURSOR_X, CURSOR_Y] = Console::getCursorPosition();
-        const int32_t ACTUAL_HEIGHT = CON_HEIGHT - BORDER_PADDING;
+        draw_frame();
+        const bool ACTIVE_HEADER = !header.empty();
+        const int32_t REAL_HEIGHT = CON_HEIGHT - BORDER_PADDING - int(ACTIVE_HEADER);
+        const int32_t CHUNKED_SZ = REAL_HEIGHT - 1;
 
-        const size_t VERT_SIZE_DIFF = ACTUAL_HEIGHT - DATA.size();
-        const bool VEC_IS_BIGGER = VERT_SIZE_DIFF < 0;
-        const size_t MAX_IDX = VEC_IS_BIGGER ? ACTUAL_HEIGHT - 1 : DATA.size();
-
-        const auto& ENUMED = DATA | std::views::enumerate;
-        auto&& print_subrange = [enumerate](auto&& ENUMED_subrange) -> void {
-            for (auto&& [idx, data] : ENUMED_subrange)
-                writeln(enumerate ? std::format(ENUMED_ELEM_FMT, idx + 1, data) : data);
+        auto&& enumed_range = DATA | std::views::enumerate;
+        auto&& print_subrange = [&](auto&& subrange) {
+            if (ACTIVE_HEADER) writeln(header);
+            for (auto&& [idx, data] : subrange)
+                writeln(enumerate ? std::format(enumed_range_ELEM_FMT, idx + 1, data) : data);
         };
 
-        if (!VEC_IS_BIGGER)
-            print_subrange(ENUMED);
+        if (int32_t(REAL_HEIGHT - DATA.size()) >= 0)
+            print_subrange(enumed_range);
         else {
-            const auto& CHUNKED = ENUMED | std::views::chunk(MAX_IDX);
-            const size_t N_PAGES = CHUNKED.size();
+            auto&& chunked = enumed_range | std::views::chunk(CHUNKED_SZ);
+            const size_t N_PAGES = chunked.size();
             auto&& page_clamp = std::bind(std::clamp<int16_t>, std::placeholders::_1, 0, N_PAGES - 1);
             int16_t current_page = 0, pressed_key = 0;
             do {
-                clear_border();
+                draw_frame();
                 if (pressed_key == Keys::LEFT_ARR)
                     current_page = page_clamp(--current_page);
                 else if (pressed_key == Keys::RIGHT_ARR)
                     current_page = page_clamp(++current_page);
-                print_subrange(CHUNKED[current_page]);
+                print_subrange(chunked[current_page]);
                 write(std::format("{} страница из {}", current_page + 1, N_PAGES));
             } while ((pressed_key = _getch()) != Keys::ENTER);
         }
     }
 
     static void draw_frame(std::string title = "") {
-        const auto [CON_WIDTH, CON_HEIGHT] = Console::getSizeByChars();
-
+        update();
         const size_t TITLE_LEN = my_strlen(title);
         const bool ENABLE_TITLE = TITLE_LEN > 0 && TITLE_LEN < CON_WIDTH;
         if (ENABLE_TITLE) {
@@ -113,28 +119,20 @@ class Console_wrapper {
 
         const std::string HOR_BORDER(CON_WIDTH, hor_symb);
         const std::string VERT_BORDER = vert_symb + std::string(CON_WIDTH - BORDER_PADDING, ' ') + vert_symb;
-        const int16_t MAX_Y_POS = int16_t(CON_HEIGHT - 1);  // -1 for 0-indexed count
+        const int16_t MAX_Y_POS = CON_HEIGHT - 1;  // -1 for 0-indexed count
 
         Console::putStr(ENABLE_TITLE ? title : HOR_BORDER, {0, 0});  // top line
         Console::putStr(HOR_BORDER, {0, MAX_Y_POS});                 // bottom line
         for (int16_t i = 1; i < MAX_Y_POS; i++)                      // vertical borders
             Console::putStr(VERT_BORDER, {0, i});                    //
-        Console::setCursorPos({1, 1});
+        new_cursor_pos({1, 1});
     }
 
     static void write(std::string_view str) {
-        const auto [CON_WIDTH, CON_HEIGHT] = Console::getSizeByChars();
-        const auto [CURSOR_X, CURSOR_Y] = Console::getCursorPosition();
         const int32_t ACTUAL_WIDTH = CON_WIDTH - BORDER_PADDING;
         const size_t STR_LENGTH = my_strlen(str);
         const ptrdiff_t FITTED_PART = ACTUAL_WIDTH - (CURSOR_X + STR_LENGTH);
-
-        if (FITTED_PART >= 0)  // if line fits horizontaly
-            std::cout << str;
-        else {
-            const size_t FITTED_SIZE = FITTED_PART + STR_LENGTH;   // FITTED_SIZE is negative
-            std::cout << str.substr(0, FITTED_SIZE - 3) << "...";  // -3 for "..."
-        }
+        std::cout << (FITTED_PART >= 0 ? str : cut_str(str, STR_LENGTH + FITTED_PART));  // FITTED_PART is negative
     }
 
     static inline void writeln(std::string_view msg) {
@@ -144,14 +142,14 @@ class Console_wrapper {
 
     template <typename T>
     [[nodiscard]] constexpr static T get_inline_input(bool password = false, char symb = '*') {
+        update();
         T buf{};
         if constexpr (std::is_same_v<T, std::string>) {
             do {
                 const char KEY = _getch();
                 if (KEY == Keys::ENTER) {
                     if (buf.empty())
-                        continue;
-                    new_line();
+                        continue;                    
                     break;
                 }
                 if (KEY == Keys::BACKSPACE) {
@@ -166,45 +164,38 @@ class Console_wrapper {
             } while (true);
         } else
             (std::cin >> buf).get();
+        new_line();
         return buf;
     }
 
     template <typename T>
     [[nodiscard]] constexpr static T get_input(bool password = false, char symb = '*') {
-        const auto [CON_WIDTH, CON_HEIGHT] = Console::getSizeByChars();
-        const auto [CURSOR_X, CURSOR_Y] = Console::getCursorPosition();
-
         Console::putStr(std::string(CON_WIDTH - BORDER_PADDING, hor_symb), {1, int16_t(CON_HEIGHT - 3)});
         Console::putStr(std::string(CON_WIDTH - BORDER_PADDING, ' '), {1, int16_t(CON_HEIGHT - BORDER_PADDING)});
         Console::putStr("Ввод: ", {1, int16_t(CON_HEIGHT - BORDER_PADDING)});
         auto&& buf = get_inline_input<T>(password, symb);
-        std::cin.clear();
-        Console::setCursorPos({CURSOR_X, CURSOR_Y});
+        new_cursor_pos({CURSOR_X, CURSOR_Y});
         return buf;
     }
 
     template <typename Ret_Type>
-    [[nodiscard]] static Ret_Type vec_selection(const std::vector<std::string>& DATA, bool enumerate = true) {
+    [[nodiscard]] static Ret_Type vec_selection(const std::vector<std::string>& DATA, bool enumerate = true, std::string_view header = "") {
         if (DATA.empty()) {
             Logger::Error("Вектор пуст!");
             return {};
         }
-        int32_t return_value = -1;
-        const auto [CON_WIDTH, CON_HEIGHT] = Console::getSizeByChars();
-        const auto [CURSOR_X, CURSOR_Y] = Console::getCursorPosition();
-        const int32_t ACTUAL_HEIGHT = CON_HEIGHT - BORDER_PADDING;
+        draw_frame();
+        int32_t selected_idx = -1;
+        const bool ACTIVE_HEADER = !header.empty();
+        const int32_t REAL_HEIGHT = CON_HEIGHT - BORDER_PADDING - int(ACTIVE_HEADER);
+        const int32_t CHUNKED_SZ = REAL_HEIGHT - 1;
+        auto&& print_header = [&] { if (ACTIVE_HEADER) writeln(header); };
 
-        const size_t VERT_SIZE_DIFF = ACTUAL_HEIGHT - DATA.size();
-        const bool VEC_IS_BIGGER = VERT_SIZE_DIFF < 0;
-        const size_t MAX_IDX = VEC_IS_BIGGER ? ACTUAL_HEIGHT - 1 : DATA.size();
-        const auto& ENUMED = DATA | std::views::enumerate;
-
-        const auto subrange_selection = [enumerate](const auto& subrange) -> int32_t {
-            clear_border();
-            const int32_t IDX_MIN = std::get<0>(subrange.front());
-            const int32_t IDX_MAX = std::get<0>(subrange.back());
-            auto&& in_page_clamp = std::bind(std::clamp<int32_t>, std::placeholders::_1, IDX_MIN, IDX_MAX);
-            int32_t scoped_idx = IDX_MIN, pressed_key = 0;
+        auto&& enumed_range = DATA | std::views::enumerate;
+        auto&& subrange_selection = [&](const auto& subrange) -> int32_t {
+            auto&& keys = subrange | std::views::keys | std::views::common;
+            auto&& in_page_clamp = std::bind(std::clamp<int32_t>, std::placeholders::_1, keys.front(), keys.back());
+            int32_t scoped_idx = in_page_clamp(0), pressed_key = 0;
             do {
                 if (pressed_key == Keys::DOWN_ARR)
                     scoped_idx = in_page_clamp(++scoped_idx);
@@ -215,53 +206,148 @@ class Console_wrapper {
                 else if (pressed_key == Keys::ESCAPE)
                     return -1;
 
-                clear_border();
+                draw_frame();
+                print_header();
                 for (auto&& [idx, data] : subrange) {
-                    const std::string STR = ' ' + (enumerate ? std::format(ENUMED_ELEM_FMT, idx + 1, data) : data);
-                    scoped_idx == idx ? writeln('>' + STR) : writeln(STR);
+                    auto formatted_str = enumerate ? std::format(enumed_range_ELEM_FMT, idx + 1, data) : data;
+                    writeln((scoped_idx == idx ? std::format("> {}", formatted_str) : formatted_str));
                 }
+                writeln("Нажмите ENTER чтобы подтвердить выбор");
             } while (pressed_key = _getch());
             return scoped_idx;
         };
 
-        if (!VEC_IS_BIGGER) {
-            do
-                return_value = subrange_selection(ENUMED);
-            while (return_value == -1);
-        } else {
-            const auto& CHUNKED = ENUMED | std::views::chunk(MAX_IDX);
-            const size_t N_PAGES = CHUNKED.size();
+        if (int32_t(REAL_HEIGHT - DATA.size()) >= 0)
+            while ((selected_idx = subrange_selection(enumed_range)) == -1)
+                ;
+        else {
+            const auto& chunked = enumed_range | std::views::chunk(CHUNKED_SZ);
+            const size_t N_PAGES = chunked.size();
             auto&& page_clamp = std::bind(std::clamp<int16_t>, std::placeholders::_1, 0, N_PAGES - 1);
             int16_t current_page = 0, pressed_key = 0;
             do {
-                clear_border();
+                draw_frame();
                 if (pressed_key == Keys::LEFT_ARR)
                     current_page = page_clamp(--current_page);
                 else if (pressed_key == Keys::RIGHT_ARR)
                     current_page = page_clamp(++current_page);
 
-                const auto& CURRENT_CHUNK = CHUNKED[current_page];
+                const auto& CURRENT_CHUNK = chunked[current_page];
+                print_header();
                 for (auto&& [idx, data] : CURRENT_CHUNK)
-                    writeln(enumerate ? std::format(ENUMED_ELEM_FMT, idx + 1, data) : data);
+                    writeln(enumerate ? std::format(enumed_range_ELEM_FMT, idx + 1, data) : data);
                 if (pressed_key == Keys::ENTER) {
-                    if ((return_value = subrange_selection(CURRENT_CHUNK)) != -1)
+                    if ((selected_idx = subrange_selection(CURRENT_CHUNK)) != -1)
                         break;
                     writeln("Нажмите ESCAPE чтобы снова выбрать нужную страницу");
                 }
-                write(std::format("{} страница из {}", current_page + 1, N_PAGES));
+                write(std::format("{} страница из {}, нажите Enter чтобы начать выбор строки", current_page + 1, N_PAGES));
             } while (pressed_key = _getch());
         }
         if constexpr (std::is_integral_v<Ret_Type>)
-            return return_value;
+            return selected_idx;
         else if constexpr (std::is_same_v<Ret_Type, std::string>)
-            return DATA[return_value];
+            return DATA[selected_idx];
     }
 
-    static inline void clear_border() {
-        const auto [CON_WIDTH, CON_HEIGHT] = Console::getSizeByChars();
-        const std::string EMPTY_SPACE(CON_WIDTH - BORDER_PADDING, ' ');
-        for (int16_t i = 1; i <= CON_HEIGHT - BORDER_PADDING; i++)
-            Console::putStr(EMPTY_SPACE, {1, i});
-        Console::setCursorPos({1, 1});
-    }
+    class Table {
+       private:
+        constexpr static inline int16_t EACH_PADDING = 1, MAX_STRLEN = 25;
+        constexpr static inline auto&& restrict_len = std::bind(std::clamp<size_t>, std::placeholders::_1, 0, MAX_STRLEN);
+
+       private:
+        std::string table_header, last_key;
+        std::vector<std::string> table_rows{};
+        std::vector<nlohmann::json> json_objects{};
+        std::map<std::string, size_t> max_cols_widths{};
+
+        Table* calc_col_width() {
+            for (auto&& j : json_objects) {
+                for (auto&& [key, value] : j.items()) {
+                    auto& current = max_cols_widths[key];
+                    current = restrict_len(std::max({current, value_view(value).length(), key.length()}));
+                }
+            }
+            if (!max_cols_widths.empty())
+                last_key = max_cols_widths.rbegin()->first;
+            return this;
+        }
+
+        Table* generate_rows() {
+            table_rows.clear();
+            for (auto&& j : json_objects) {
+                std::string row_buf;
+                for (auto&& [key, col_width] : max_cols_widths) {
+                    const auto prepared = cut_str(value_view(j[key]), MAX_STRLEN);
+                    row_buf += place_by_width(prepared, col_width + EACH_PADDING);
+                    if (key != last_key)
+                        row_buf += '|';
+                }
+                table_rows.push_back(std::move(row_buf));
+            }
+            return this;
+        }
+
+        Table* generate_header() {
+            calc_col_width();
+            std::string header_buf;
+            for (auto&& [key, col_width] : max_cols_widths) {
+                header_buf += place_by_width(key, col_width + EACH_PADDING);
+                if (key != last_key)
+                    header_buf += '|';
+            }
+            table_header = std::format("\033[4m{}\033[0m", header_buf);  // underlined
+            return this;
+        }
+
+       public:
+        static auto create_table(const nlohmann::json& js_obj) {
+            std::unique_ptr<Table> table_ptr = nullptr;
+            if (js_obj.empty() || js_obj.is_null()) {
+                Logger::Error("Пусто!");
+                return table_ptr;
+            }
+            table_ptr = std::make_unique<Table>();
+            table_ptr->json_objects = represent_json(js_obj);
+            table_ptr->table_rows.reserve(table_ptr->json_objects.size());  // 1 object is 1 row
+            return table_ptr;
+        }
+
+        void view() {
+            generate_header()->generate_rows();
+            const int16_t MAX_W = my_strlen(table_header) + BORDER_PADDING + 1;
+            if(MAX_W > 50)
+                Console::setSizeByChars({MAX_W, CON_HEIGHT});
+            vec_write(table_rows, false, table_header);
+        }
+
+        template <typename Ty>
+        [[nodiscard]] Ty pick() {
+            generate_header()->generate_rows();
+            const int16_t MAX_W = my_strlen(table_header) + BORDER_PADDING + 1;
+            Console::setSizeByChars({MAX_W, CON_HEIGHT});
+            auto&& selected_idx = vec_selection<int32_t>(table_rows, false, table_header);
+            return Ty(json_objects[selected_idx]["Title"].get<std::string>());
+        }
+
+        Table* include_only(auto&& func) {
+            auto&& temp = json_objects |
+                          std::views::filter(func) |
+                          std::views::transform([](auto&& j) { return j; }) |
+                          std::ranges::to<decltype(json_objects)>();
+            json_objects.swap(temp);
+            return this;
+        }
+
+        Table* sort(std::string_view sort_key, Sort_Method sm = less) {
+            auto&& f = [less = sm == Sort_Method::less, &sort_key](auto&& l, auto&& r) -> bool {
+                return less ? l[sort_key] < r[sort_key] : l[sort_key] > r[sort_key];
+            };
+            std::ranges::sort(json_objects, f);
+            return this;
+        }
+
+        [[nodiscard]] const auto& get_header() const { return table_header; }
+        [[nodiscard]] const size_t get_sz() const { return json_objects.size(); }
+    };
 };

@@ -1,5 +1,5 @@
 #pragma once
-
+#include <algorithm>
 #include <format>
 #include <ranges>
 #include <sstream>
@@ -8,103 +8,183 @@
 #include "Book.hpp"
 #include "Console_wrapper.hpp"
 #include "User.hpp"
-
-struct FUNCTION {
-    const char* name;
-    void (*func)();
-    constexpr void invoke() const { func(); }
-};
+#include "Utils.hpp"
 
 namespace USER_Functions {
+    void my_task() {
+        auto&& all_books_json = Book::get_json();
+        if (all_books_json.empty()) {
+            Logger::Error("Список книг пока пуст!");
+            return;
+        }
+        Console_wrapper::write("Введите год: ");
+        auto&& year = Console_wrapper::get_inline_input<uint16_t>();
+        auto&& books_table = Console_wrapper::Table::create_table(all_books_json);
+        books_table
+            ->include_only([year](auto&& j) { return !j["In library"] && j["Year"] <= year; })
+            ->sort("Author")
+            ->view();
+    }
+
     void view_all_books() {
-        const nlohmann::json& ALL_BOOKS = Book::get_all_books();
-        const std::vector<std::string> BOOKS = ALL_BOOKS.items() |
-                                               std::views::transform([](auto&& js_item) { return js_item.key(); }) |
-                                               std::ranges::to<std::vector<std::string>>();
-        Console_wrapper::vec_write(BOOKS, true);
-    }
-
-    void take_book() {
-        const nlohmann::json& ALL_BOOKS = Book::get_all_books();
-        if (ALL_BOOKS.empty()) {
-            Logger::Error("К сожалению список книг пока пуст!");
-            return;
-        }
-        const std::vector<std::string> BOOKS = ALL_BOOKS.items() |
-                                               std::views::filter([](auto&& js_item) {
-                                                   return js_item.value().at("In library").get<bool>();
-                                               }) |
-                                               std::views::transform([](auto&& js_item) { return js_item.key(); }) |
-                                               std::ranges::to<std::vector<std::string>>();
-        Book book(Console_wrapper::vec_selection<std::string>(BOOKS, false));
-        User::get_current_user()->take_book(book);
-        book.update_data();
-        Logger::Succsess("Книга взята!");
-    }
-
-    void return_book() {
-        const nlohmann::json& ALL_BOOKS = Book::get_all_books();
-        if (ALL_BOOKS.empty()) {
-            Logger::Error("К сожалению список книг пока пуст!");
-            return;
-        }
-        User& user = *User::get_current_user();
-        const std::string TITLE = Console_wrapper::vec_selection<std::string>(user.get_taken_books());
-        if (!TITLE.empty()) {
-            Book book(TITLE);
-            user.return_book(book);
-            book.update_data();
-            Logger::Succsess("Книга возвращена!");
-        }
+        Console_wrapper::Table::create_table(Book::get_json())
+            ->sort("ID")
+            ->view();
     }
 
     void search_book() {
-        const nlohmann::json& ALL_BOOKS = Book::get_all_books();
-        if (ALL_BOOKS.empty()) {
-            Logger::Error("К сожалению список книг пока пуст!");
+        auto&& all_books_vector = Book::get_vector();
+        if (all_books_vector.empty()) {
+            Logger::Error("Список книг пока пуст!");
             return;
         }
         Console_wrapper::writeln("Введите название книги которую желаете найти");
-        const std::string TO_FIND = Console_wrapper::get_input<std::string>();
-        for (auto&& book : Book::get_all_books().items()) {
-            if (std::string_view key = book.key(); key.contains(TO_FIND)) {
+        auto&& to_find = Console_wrapper::get_input<std::string>();
+        for (auto&& book : all_books_vector) {
+            if (std::string title = book.get_title(); title.contains(to_find)) {
                 Console_wrapper::writeln("Книга найдена!");
-                Console_wrapper::vec_write(Book(key).get_data(), false);
+                Console_wrapper::vec_write(book.get_data(), false);
                 return;
             }
         }
         Logger::Error("Такой книги нет!");
     }
+
+    void take_book() {
+        auto&& all_books_json = Book::get_json();
+        if (all_books_json.empty()) {
+            Logger::Error("Список книг пока пуст!");
+            return;
+        }
+        auto&& books_table = Console_wrapper::Table::create_table(all_books_json);
+        auto&& included = books_table->include_only([](auto&& j) { return j["In library"]; });
+        if (!included->get_sz())
+            return;
+        auto&& book = included->pick<Book>();
+        User::get_current_user()->take_book(book);
+        book.set_last_reader(User::get_current_user()->get_reader_ID());
+        book.toggle_status();
+        book.update_data();
+        Logger::Succsess("Книга взята!");
+    }
+
+    void return_book() {
+        auto&& taken_books = User::get_current_user()->get_taken_books();
+        if (Book::get_json().empty() || taken_books.empty()) {
+            Logger::Error("Нет взятых книг!");
+            return;
+        }
+        Book book(Console_wrapper::vec_selection<std::string>(taken_books));
+        User::get_current_user()->return_book(book);
+        book.toggle_status();
+        book.update_data();
+        Logger::Succsess("Книга возвращена!");
+    }
+
+    void sort_books() {
+        auto&& all_books_json = Book::get_json();
+        if (all_books_json.empty()) {
+            Logger::Error("Список книг пока пуст!");
+            return;
+        }
+        auto&& books_table = Console_wrapper::Table::create_table(all_books_json);
+        static const std::vector<std::string> choises = {"Название", "Автор", "Год выпуска", "ID книги",
+                                                         "Издатель", "Количество страниц", "ID последнего читателя"};
+        const auto choice = Console_wrapper::vec_selection<int16_t>(choises, true, "Выберите по чем сортировать:") + 1;
+
+        Console_wrapper::writeln("Выберите способ сортировки:");
+        Console_wrapper::writeln("1) От меньшего к большему");
+        Console_wrapper::writeln("2) От большего к меньшему");
+        const Sort_Method sm = Console_wrapper::get_inline_input<int16_t>() == 1 ? less : greater;
+        switch (choice) {
+            case 1:
+                books_table->sort("Title", sm);
+                break;
+            case 2:
+                books_table->sort("Author", sm);
+                break;
+            case 3:
+                books_table->sort("Year", sm);
+                break;
+            case 4:
+                books_table->sort("ID", sm);
+                break;
+            case 5:
+                books_table->sort("Publisher", sm);
+                break;
+            case 6:
+                books_table->sort("Pages", sm);
+                break;
+            case 7:
+                books_table->sort("Last reader", sm);
+                break;
+        }
+        books_table->view();
+    }
 }  // namespace USER_Functions
 
 namespace ADMIN_Functions {
     void print_all_users() {
-        const nlohmann::json& ALL_ACCS = User::get_all_accs();
-        if (ALL_ACCS.empty()) {
+        auto&& all_users_json = User::get_json();
+        if (all_users_json.empty()) {
             Logger::Error("Список пользователей пуст!");
             return;
         }
-        const std::vector<std::string> LOGINS = ALL_ACCS.items() |
-                                                std::views::transform([](auto&& js_item) { return js_item.key(); }) |
-                                                std::ranges::to<std::vector<std::string>>();
-        const User USER(Console_wrapper::vec_selection<std::string>(LOGINS));
-        Console_wrapper::clear_border();
-        Console_wrapper::writeln(std::format("Выбранный пользователь: {}", USER.get_login()));
-        Console_wrapper::vec_write(USER.get_data(), false);
+        auto&& user = Console_wrapper::Table::create_table(all_users_json)->pick<User>();
+        Console_wrapper::draw_frame();
+        Console_wrapper::writeln(std::format("Выбранный пользователь: {}", user.get_login()));
+        Console_wrapper::vec_write(user.get_data(), false);
+    }
+
+    void add_book() {
+        Console_wrapper::draw_frame("Добавление книги");
+        Console_wrapper::write("Введите название: ");
+        auto&& title_buf = Console_wrapper::get_inline_input<std::string>();
+        Console_wrapper::write("Введите автора: ");
+        auto&& author_buf = Console_wrapper::get_inline_input<std::string>();
+        Console_wrapper::write("Введите издателя: ");
+        auto&& pub_buf = Console_wrapper::get_inline_input<std::string>();
+        Console_wrapper::write("Введите количество страниц: ");
+        auto&& pages_buf = Console_wrapper::get_inline_input<uint16_t>();
+        Console_wrapper::write("Введите год выпуска: ");
+        auto&& year_buf = Console_wrapper::get_inline_input<uint16_t>();
+        Console_wrapper::writeln("Выберите статус: ");
+        Console_wrapper::writeln("1) В библиотеке");
+        Console_wrapper::writeln("2) У читателя");
+        auto&& in_lib_buf = Console_wrapper::get_inline_input<uint16_t>() == 1;
+        Book(title_buf, in_lib_buf, year_buf, pages_buf, author_buf, pub_buf);
+        Logger::Succsess("Книга успешно добавлена!");
+    }
+
+    void add_user() {
+        Console_wrapper::draw_frame("Добавление пользователя");
+        auto&& all_users_json = User::get_json();
+        Console_wrapper::write("Введите логин: ");
+        auto&& login_buf = Console_wrapper::get_inline_input<std::string>();
+        if (all_users_json.contains(login_buf)) {
+            Logger::Error("Аккаунт с таким логином уже существует");
+            std::cin.get();
+            return;
+        }
+        Console_wrapper::write("Задайте пароль: ");
+        auto&& passw_buf = Console_wrapper::get_inline_input<std::string>(true);
+        Console_wrapper::writeln("Выберите роль:");
+        Console_wrapper::writeln("1) Администратор");
+        Console_wrapper::writeln("2) Пользователь");
+        auto&& ur = Console_wrapper::get_inline_input<int16_t>() == 1 ? User_role::admin : User_role::user;
+        User(login_buf, passw_buf, ur);
+        Logger::Succsess("Пользователь успешно добавлен!");
     }
 
     void edit_user() {
-        const nlohmann::json& ALL_ACCS = User::get_all_accs();
-        if (ALL_ACCS.empty()) {
+        auto&& all_users_json = User::get_json();
+        if (all_users_json.empty()) {
             Logger::Error("Список пользователей пуст!");
             return;
         }
-        const std::vector<std::string> LOGINS = ALL_ACCS.items() |
-                                                std::views::transform([](auto&& js_item) { return js_item.key(); }) |
-                                                std::ranges::to<std::vector<std::string>>();
-        User user(Console_wrapper::vec_selection<std::string>(LOGINS));
+        auto&& user = Console_wrapper::Table::create_table(all_users_json)->pick<User>();
 
-        Console_wrapper::clear_border();
+        Console_wrapper::draw_frame();
         Console_wrapper::writeln(std::format("Выбранный пользователь: {}", user.get_login()));
         Console_wrapper::writeln("Выберите то, что желаете изменить:");
         Console_wrapper::writeln("1) Логин");
@@ -120,7 +200,7 @@ namespace ADMIN_Functions {
                 user.set_password(Console_wrapper::get_input<std::string>(true));
                 break;
             case 3:
-                Console_wrapper::writeln("Роль была изменена!");
+                Console_wrapper::writeln("Статус была изменена!");
                 user.set_role(User_role(!bool(user.get_role())));
                 break;
             default:
@@ -130,16 +210,14 @@ namespace ADMIN_Functions {
         Console_wrapper::writeln("Новые данные сохранены");
     }
 
-    void delete_user_entry() {
-        const nlohmann::json& ALL_ACCS = User::get_all_accs();
-        if (ALL_ACCS.empty()) {
+    void erase_user() {
+        auto&& all_users_json = User::get_json();
+        if (all_users_json.empty()) {
             Logger::Error("Список пользователей пуст!");
             return;
         }
-        const std::vector<std::string> LOGINS = ALL_ACCS.items() |
-                                                std::views::transform([](auto&& js_item) { return js_item.key(); }) |
-                                                std::ranges::to<std::vector<std::string>>();
-        User::erase(Console_wrapper::vec_selection<std::string>(LOGINS));
+        auto&& user = Console_wrapper::Table::create_table(all_users_json)->pick<User>();
+        User::erase(user.get_login());
     }
 
     void remove_file() {
@@ -149,12 +227,12 @@ namespace ADMIN_Functions {
                 files.emplace_back(f_path.filename().string());
         }
         Console_wrapper::writeln("Выберите файл");
-        const std::string TO_REMOVE = Console_wrapper::vec_selection<std::string>(files);
-        Console_wrapper::writeln(std::format("Вы уверены, что хотите удалить {}?", TO_REMOVE));
+        auto&& to_remove = Console_wrapper::vec_selection<std::string>(files);
+        Console_wrapper::writeln(std::format("Вы уверены, что хотите удалить {}?", to_remove));
         Console_wrapper::writeln("1) Да");
         Console_wrapper::writeln("2) Нет");
         if (Console_wrapper::get_input<uint16_t>() == 1) {
-            std::filesystem::remove(TO_REMOVE);
+            std::filesystem::remove(to_remove);
             Logger::Succsess("Файл удален!");
         } else
             Logger::Warning("Действие было отменено");
@@ -168,14 +246,21 @@ struct ILibrary {
     constexpr virtual ~ILibrary() = default;
 };
 
+struct FUNCTION {
+    const char* name;
+    void (*func)();
+    constexpr void invoke() const { func(); }
+};
+
 class User_lib : public virtual ILibrary {
    protected:
     static inline const std::vector<FUNCTION> user_funcs{
+        {"задание по варианту", USER_Functions::my_task},
         {"просмотреть все книги", USER_Functions::view_all_books},
         {"поиск книги", USER_Functions::search_book},
         {"взять книгу", USER_Functions::take_book},
         {"вернуть книгу", USER_Functions::return_book},
-        {"!сортировка", [] { Console_wrapper::writeln("user #5"); }},
+        {"сортировка", USER_Functions::sort_books},  //
     };
 
    public:
@@ -198,20 +283,18 @@ class Admin_lib : virtual public ILibrary, public User_lib {
    protected:
     static inline const std::vector<FUNCTION> admin_funcs{
         {"просмотреть все учетные записи", ADMIN_Functions::print_all_users},
-        {"!добавить книгу", [] { Console_wrapper::writeln("admin #2"); }},
-        {"!добавить учетную запись", [] { Console_wrapper::writeln("admin #3"); }},
+        {"добавить книгу", ADMIN_Functions::add_book},
+        {"добавить учетную запись", ADMIN_Functions::add_user},
         {"отредактировать учетную запись", ADMIN_Functions::edit_user},
-        {"удалить учетную запись", ADMIN_Functions::delete_user_entry},
+        {"удалить учетную запись", ADMIN_Functions::erase_user},
         {"удалить файл", ADMIN_Functions::remove_file},
     };
 
    public:
     [[nodiscard]] constexpr std::vector<std::string> get_menu() const override {
-        auto&& menu = std::move(User_lib::get_menu());
-        std::ranges::move(admin_funcs |
-                              std::views::transform([](const FUNCTION& func) { return func.name; }) |
-                              std::ranges::to<std::vector<std::string>>(),
-                          std::back_inserter(menu));
+        auto&& menu = User_lib::get_menu();
+        for (auto&& f : admin_funcs)
+            menu.emplace_back(f.name);
         return menu;
     }
 
@@ -227,28 +310,3 @@ class Admin_lib : virtual public ILibrary, public User_lib {
         return User_lib::get_menu_size() + admin_funcs.size();
     }
 };
-/* ADMIN!
-1. Управление учетными записями пользователей:
-- добавить учетную запись;
-2. *Работа с файлом данных:
-- создать файл;
-- открыть файл;
-- удалить файл.
-3. Работа с данными:
-а) режим редактирования:
-- просмотреть все данные;
-- добавить запись;
-- удалить запись (для этого необходимо ввести порядковый номер конкретной записи);
-- редактировать запись (для этого необходимо ввести порядковый номер конкретной
-записи).
-*/
-
-/* USER
-- просмотреть все данные;
-- выполнить задачи, указанную в индивидуальном задании:
-    Вывести  список  книг  с  фамилиями  авторов  в  алфавитном  порядке,  изданных  после
-    заданного  года  (год  вводится  с  клавиатуры).  Вывести  список  книг,  находящихся  в
-    текущий момент у читателей
-- выполнить поиск данных;
-- выполнить сортировку по различным полям в алфавитном порядке / в порядке убывания.
-*/

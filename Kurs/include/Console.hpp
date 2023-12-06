@@ -1,12 +1,11 @@
 #pragma once
 #define NOMINMAX
-#include <corecrt_wstdio.h>
-#include <windows.h>
+#include <Windows.h>
 
 #include <concepts>
+#include <format>
 #include <iostream>
 #include <string>
-#include <string_view>
 
 #define GETTER [[nodiscard]] inline decltype(auto)
 #define SETTER inline void
@@ -41,11 +40,11 @@ namespace Console {
     }
 
     SETTER setSizeByChars(const SZ<int16_t>& newSize) {
-        const auto& [W, H] = newSize;
-        const COORD coord{W, H};
-        const SMALL_RECT rect{0, 0, W - 1, H - 1};
-        SetConsoleScreenBufferSize(GetStdHandle(STD_OUTPUT_HANDLE), coord);  // Set Buffer Size
-        SetConsoleWindowInfo(GetStdHandle(STD_OUTPUT_HANDLE), TRUE, &rect);  // Set Window Size
+        auto&& [w, h] = newSize;
+        COORD coord{w,h};
+        SMALL_RECT Rect{0,0,w - 1, h - 1};
+        SetConsoleScreenBufferSize(GetStdHandle(STD_OUTPUT_HANDLE), coord);            // Set Buffer Size
+        SetConsoleWindowInfo(GetStdHandle(STD_OUTPUT_HANDLE), TRUE, &Rect);            // Set Window Size
     }
 
     GETTER getFontSize() {
